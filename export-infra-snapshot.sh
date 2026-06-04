@@ -289,7 +289,31 @@ EOF
   progress "Compute — ECR (repositories, images, scanning)"
   # ---------- ECR ----------
   safe_aws_json "${out_dir}/raw/ecr-repositories.json" ecr describe-repositories
-  safe_aws_json "${out_dir}/raw/ecr-registry-scanning-config.json" --cli-read-timeout 30 ecr get-registry-scanning-configuration
+  # ecr get-registry-scanning-configuration can hang for several minutes on
+  # large accounts because it aggregates Inspector v2 data per repository.
+  # Use a hard OS-level timeout (gtimeout on macOS, timeout on Linux) so the
+  # process is actually killed — --cli-read-timeout alone is not reliable when
+  # the server holds the TCP connection open without sending any bytes.
+  _ecr_scan_out="${out_dir}/raw/ecr-registry-scanning-config.json"
+  _timeout_cmd=""
+  if command -v gtimeout >/dev/null 2>&1; then _timeout_cmd="gtimeout 30"
+  elif command -v timeout >/dev/null 2>&1; then _timeout_cmd="timeout 30"
+  fi
+  echo "→ ${_ecr_scan_out}"
+  if ${_timeout_cmd} aws "${AWS_ARGS[@]}" ecr get-registry-scanning-configuration \
+       > "${_ecr_scan_out}" 2>"${_ecr_scan_out}.stderr"; then
+    rm -f "${_ecr_scan_out}.stderr"
+  else
+    _exit=$?
+    rm -f "${_ecr_scan_out}.stderr"
+    echo '{}' > "${_ecr_scan_out}"
+    if [[ $_exit -eq 124 ]]; then
+      echo "WARN: ecr get-registry-scanning-configuration timed out after 30s — writing {}" >&2
+    else
+      echo "WARN: ecr get-registry-scanning-configuration failed (exit ${_exit}) — writing {}" >&2
+    fi
+  fi
+  unset _ecr_scan_out _timeout_cmd _exit
   local repo_names
   repo_names="$(jq -r '.repositories[]?.repositoryName // empty' "${out_dir}/raw/ecr-repositories.json" 2>/dev/null || true)"
   : > "${out_dir}/raw/ecr-repository-policies.ndjson"
