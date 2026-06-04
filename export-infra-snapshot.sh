@@ -180,6 +180,10 @@ run_snapshot_for_region() {
     fi
   }
 
+  progress() {
+    printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*" >&2
+  }
+
   cat > "${out_dir}/manifest.json" <<EOF
 {
   "timestamp_utc": "${timestamp}",
@@ -190,6 +194,9 @@ run_snapshot_for_region() {
 }
 EOF
 
+  progress "Starting snapshot — ${region}"
+
+  progress "Broad inventory (Resource Explorer, tagging API)"
   # ---------- Broad inventory ----------
   safe_aws_json "${out_dir}/raw/resourcegroupstaggingapi-get-resources.json" \
     resourcegroupstaggingapi get-resources
@@ -204,6 +211,7 @@ EOF
       resource-explorer-2 search --view-arn "$default_view_arn" --query-string "*"
   fi
 
+  progress "Compute — ECS (clusters, services, tasks, task definitions)"
   # ---------- ECS ----------
   safe_aws_json "${out_dir}/raw/ecs-clusters.json" ecs list-clusters
   local cluster_arns
@@ -278,9 +286,10 @@ EOF
     ec2 describe-instances \
     --filters "Name=tag-key,Values=aws:ecs:cluster-name"
 
+  progress "Compute — ECR (repositories, images, scanning)"
   # ---------- ECR ----------
   safe_aws_json "${out_dir}/raw/ecr-repositories.json" ecr describe-repositories
-  safe_aws_json "${out_dir}/raw/ecr-registry-scanning-config.json" ecr get-registry-scanning-configuration
+  safe_aws_json "${out_dir}/raw/ecr-registry-scanning-config.json" --cli-read-timeout 30 ecr get-registry-scanning-configuration
   local repo_names
   repo_names="$(jq -r '.repositories[]?.repositoryName // empty' "${out_dir}/raw/ecr-repositories.json" 2>/dev/null || true)"
   : > "${out_dir}/raw/ecr-repository-policies.ndjson"
@@ -297,6 +306,7 @@ EOF
     aws "${AWS_ARGS[@]}" ecr describe-images --repository-name "$repo" 2>/dev/null | jq -c --arg repo "$repo" '{repository_name:$repo, data:.}' >> "${out_dir}/raw/ecr-images.ndjson" || true
   done <<< "$repo_names"
 
+  progress "Scaling — Auto Scaling (ECS policies, EC2 ASGs, launch templates)"
   # ---------- Application Auto Scaling (ECS) ----------
   safe_aws_json "${out_dir}/raw/autoscaling-ecs-scalable-targets.json" \
     application-autoscaling describe-scalable-targets --service-namespace ecs
@@ -324,6 +334,7 @@ EOF
       jq -c --arg lt "$lt" '{launch_template_id:$lt, data:.}' >> "${out_dir}/raw/ec2-launch-template-versions.ndjson" || true
   done <<< "$lt_ids"
 
+  progress "Service discovery — Cloud Map"
   # ---------- Cloud Map / Service discovery ----------
   safe_aws_json "${out_dir}/raw/servicediscovery-list-namespaces.json" servicediscovery list-namespaces
   local namespace_ids
@@ -348,6 +359,7 @@ EOF
     jq -c --arg service_id "$svc" '{service_id:$service_id, data:.}' "${out_dir}/raw/servicediscovery-list-instances-${svc}.json" >> "${out_dir}/raw/servicediscovery-instances.ndjson"
   done <<< "$service_ids"
 
+  progress "Load balancing & edge — ALB/NLB, ACM, WAFv2, CloudFront"
   # ---------- ELBv2 ----------
   safe_aws_json "${out_dir}/raw/elbv2-load-balancers.json" elbv2 describe-load-balancers
   local lb_arns
@@ -447,6 +459,7 @@ EOF
     done <<< "$dist_ids"
   fi
 
+  progress "Networking — VPC, subnets, SGs, route tables, TGW, VPN, Direct Connect"
   # ---------- VPC / networking ----------
   safe_aws_json "${out_dir}/raw/ec2-vpcs.json" ec2 describe-vpcs
   safe_aws_json "${out_dir}/raw/ec2-subnets.json" ec2 describe-subnets
@@ -473,6 +486,7 @@ EOF
   safe_aws_json "${out_dir}/raw/directconnect-virtual-interfaces.json" directconnect describe-virtual-interfaces
   safe_aws_json "${out_dir}/raw/directconnect-gateways.json" directconnect describe-direct-connect-gateways
 
+  progress "Databases — RDS, RDS Proxy, Redshift, DocumentDB, DynamoDB"
   # ---------- RDS ----------
   safe_aws_json "${out_dir}/raw/rds-db-instances.json" rds describe-db-instances
   safe_aws_json "${out_dir}/raw/rds-db-clusters.json" rds describe-db-clusters
@@ -587,6 +601,7 @@ EOF
   done <<< "$ddb_table_names"
   safe_aws_json "${out_dir}/raw/dynamodb-backups.json" dynamodb list-backups
 
+  progress "Storage — EFS, S3"
   # ---------- EFS ----------
   safe_aws_json "${out_dir}/raw/efs-file-systems.json" efs describe-file-systems
   local efs_ids
@@ -655,6 +670,7 @@ EOF
     done <<< "$s3_bucket_names"
   fi
 
+  progress "Cache & search — ElastiCache, MemoryDB, OpenSearch"
   # ---------- Cache: ElastiCache / MemoryDB ----------
   safe_aws_json "${out_dir}/raw/elasticache-replication-groups.json" elasticache describe-replication-groups
   safe_aws_json "${out_dir}/raw/elasticache-cache-clusters.json" elasticache describe-cache-clusters --show-cache-node-info
@@ -693,6 +709,7 @@ EOF
   done <<< "$os_domain_names"
 
   if [[ "$skip_globals" != "true" ]]; then
+    progress "DNS — Route53, Route53 Resolver"
     # ---------- Route53 / DNS ----------
     safe_aws_json "${out_dir}/raw/route53-hosted-zones.json" route53 list-hosted-zones
     local hz_ids
@@ -726,6 +743,7 @@ EOF
       "${out_dir}/raw/route53-traffic-policies.json" 2>/dev/null || true)
   fi
 
+  progress "DNS — Route53 Resolver"
   # ---------- Route53 Resolver ----------
   safe_aws_json "${out_dir}/raw/r53resolver-endpoints.json" route53resolver list-resolver-endpoints
   local resolver_ep_ids
@@ -756,6 +774,7 @@ EOF
     route53resolver list-resolver-rule-associations
 
   if [[ "$skip_globals" != "true" ]]; then
+    progress "IAM — roles, users, groups, policies, instance profiles"
     # ---------- IAM ----------
     safe_aws_json "${out_dir}/raw/iam-roles.json" iam list-roles
     local role_names
@@ -829,6 +848,7 @@ EOF
       "${out_dir}/raw/iam-local-policies.json" 2>/dev/null || true)
   fi
 
+  progress "Serverless — Lambda, API Gateway, Cognito"
   # ---------- Lambda ----------
   safe_aws_json "${out_dir}/raw/lambda-functions.json" lambda list-functions
   safe_aws_json "${out_dir}/raw/lambda-event-source-mappings.json" lambda list-event-source-mappings
@@ -892,6 +912,7 @@ EOF
       jq -c --arg id "$pool_id" '{user_pool_id:$id, data:.}' >> "${out_dir}/raw/cognito-user-pool-details.ndjson" || true
   done <<< "$cognito_pool_ids"
 
+  progress "Observability — CloudWatch (logs, alarms, dashboards)"
   # ---------- CloudWatch Logs ----------
   safe_aws_json "${out_dir}/raw/logs-log-groups.json" logs describe-log-groups
   safe_aws_json "${out_dir}/raw/logs-metric-filters.json" logs describe-metric-filters
@@ -911,6 +932,7 @@ EOF
       jq -c --arg name "$dashboard" '{dashboard_name:$name, data:.}' >> "${out_dir}/raw/cloudwatch-dashboard-bodies.ndjson" || true
   done <<< "$dashboard_names"
 
+  progress "Config & secrets — Secrets Manager, SSM Parameters"
   # ---------- Secrets / SSM params ----------
   safe_aws_json "${out_dir}/raw/secretsmanager-list-secrets.json" secretsmanager list-secrets
   local sm_secret_ids
@@ -950,6 +972,7 @@ EOF
     done <<< "$param_names"
   fi
 
+  progress "Messaging — SQS, SNS, EventBridge, Step Functions, MQ, MSK, Kinesis, Firehose"
   # ---------- SQS ----------
   safe_aws_json "${out_dir}/raw/sqs-queues.json" sqs list-queues
   local queue_urls
@@ -1049,6 +1072,7 @@ EOF
       jq -c --arg s "$stream" '{stream_name:$s, data:.}' >> "${out_dir}/raw/firehose-delivery-stream-details.ndjson" || true
   done <<< "$firehose_stream_names"
 
+  progress "CI/CD — CodeBuild, CodePipeline, CodeDeploy, CodeStar"
   # ---------- CodeBuild ----------
   safe_aws_json "${out_dir}/raw/codebuild-projects.json" codebuild list-projects
   local cb_names_file
@@ -1109,6 +1133,7 @@ EOF
     done <<< "$oidc_arns"
   fi
 
+  progress "Security & governance — KMS, CloudTrail, Config, GuardDuty, Security Hub, Access Analyzer"
   # ---------- KMS ----------
   safe_aws_json "${out_dir}/raw/kms-keys.json" kms list-keys
   safe_aws_json "${out_dir}/raw/kms-aliases.json" kms list-aliases
@@ -1192,6 +1217,7 @@ EOF
     done <<< "$scp_ids"
   fi
 
+  progress "Building derived topology files..."
   export OUT_DIR="$out_dir"
   python3 <<'PY'
 import json
@@ -2372,6 +2398,7 @@ PY
 }
 EOF
 
+  progress "✓ Snapshot complete — $(basename "$out_dir")"
   echo
   echo "Snapshot complete: ${out_dir}"
 }
