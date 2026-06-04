@@ -1,0 +1,10 @@
+{
+  "ecs-api-task-role":           {"role_arn": "arn:aws:iam::123456789012:role/ecs-api-task-role",           "trusted_services": ["ecs-tasks.amazonaws.com"], "trusted_accounts": [], "trusted_roles": [], "federated_principals": []},
+  "ecs-worker-task-role":        {"role_arn": "arn:aws:iam::123456789012:role/ecs-worker-task-role",        "trusted_services": ["ecs-tasks.amazonaws.com"], "trusted_accounts": [], "trusted_roles": [], "federated_principals": []},
+  "ecs-frontend-task-role":      {"role_arn": "arn:aws:iam::123456789012:role/ecs-frontend-task-role",      "trusted_services": ["ecs-tasks.amazonaws.com"], "trusted_accounts": [], "trusted_roles": [], "federated_principals": []},
+  "ecs-execution-role":          {"role_arn": "arn:aws:iam::123456789012:role/ecs-execution-role",          "trusted_services": ["ecs-tasks.amazonaws.com"], "trusted_accounts": [], "trusted_roles": [], "federated_principals": []},
+  "lambda-event-processor-role": {"role_arn": "arn:aws:iam::123456789012:role/lambda-event-processor-role", "trusted_services": ["lambda.amazonaws.com"], "trusted_accounts": [], "trusted_roles": [], "federated_principals": []},
+  "lambda-rotation-role":        {"role_arn": "arn:aws:iam::123456789012:role/lambda-rotation-role",        "trusted_services": ["lambda.amazonaws.com"], "trusted_accounts": [], "trusted_roles": [], "federated_principals": []},
+  "lambda-report-role":          {"role_arn": "arn:aws:iam::123456789012:role/lambda-report-role",          "trusted_services": ["lambda.amazonaws.com"], "trusted_accounts": [], "trusted_roles": [], "federated_principals": []},
+  "codepipeline-role":           {"role_arn": "arn:aws:iam::123456789012:role/codepipeline-role",           "trusted_services": ["codepipeline.amazonaws.com"], "trusted_accounts": [], "trusted_roles": [], "federated_principals": []}
+}

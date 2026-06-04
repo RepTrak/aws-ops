@@ -1,0 +1,30 @@
+{
+  "key-rds-prod": {
+    "alias": "alias/prod-rds",
+    "resources": [
+      {"resource_type": "rds_instance", "resource_id": "prod-api-db"}
+    ]
+  },
+  "key-cache-prod": {
+    "alias": "alias/prod-cache",
+    "resources": [
+      {"resource_type": "elasticache", "resource_id": "prod-cache"}
+    ]
+  },
+  "key-secrets-prod": {
+    "alias": "alias/prod-secrets",
+    "resources": [
+      {"resource_type": "secret", "resource_id": "arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/db-abc123"},
+      {"resource_type": "secret", "resource_id": "arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/jwt-def456"},
+      {"resource_type": "secret", "resource_id": "arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/worker/queue-key-ghi789"}
+    ]
+  },
+  "key-s3-prod": {
+    "alias": "alias/prod-s3",
+    "resources": [
+      {"resource_type": "s3_bucket", "resource_id": "prod-company-assets"},
+      {"resource_type": "s3_bucket", "resource_id": "prod-company-backups"},
+      {"resource_type": "s3_bucket", "resource_id": "prod-company-reports"}
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "api-deploy-pipeline": {
+    "artifact_store_bucket": "prod-company-backups",
+    "artifact_store_type": "S3",
+    "stages": [
+      {"name": "Source", "actions": [{"name": "GitHub", "category": "Source", "provider": "CodeStarSourceConnection"}]},
+      {"name": "Build",  "actions": [{"name": "Build",  "category": "Build",  "provider": "CodeBuild"}]},
+      {"name": "Deploy", "actions": [{"name": "Deploy", "category": "Deploy", "provider": "ECS"}]}
+    ],
+    "resource_refs": [
+      {"stage": "Source", "action": "GitHub", "category": "Source", "provider": "CodeStarSourceConnection", "resource_type": "codestar_connection", "connection_arn": "arn:aws:codestar-connections:us-east-2:123456789012:connection/abc123", "repo": "company/api", "branch": "main"},
+      {"stage": "Build",  "action": "Build",  "category": "Build",  "provider": "CodeBuild",              "resource_type": "codebuild",           "project": "api-build"},
+      {"stage": "Deploy", "action": "Deploy", "category": "Deploy", "provider": "ECS",                   "resource_type": "ecs_service",         "cluster": "prod-cluster", "service": "api-service"}
+    ]
+  }
+}

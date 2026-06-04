@@ -1,0 +1,74 @@
+{
+  "ecs-api-task-role": {
+    "service_access": {
+      "s3": ["arn:aws:s3:::prod-company-assets/*", "arn:aws:s3:::prod-company-reports/*"],
+      "secretsmanager": ["arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/*"],
+      "ses": ["*"],
+      "xray": ["*"]
+    },
+    "allow_statements": [
+      {"source": "inline", "policy_name": "api-s3-access", "actions": ["s3:GetObject","s3:PutObject"], "resources": ["arn:aws:s3:::prod-company-assets/*","arn:aws:s3:::prod-company-reports/*"], "services": ["s3"]},
+      {"source": "inline", "policy_name": "api-secrets", "actions": ["secretsmanager:GetSecretValue"], "resources": ["arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/*"], "services": ["secretsmanager"]},
+      {"source": "managed", "policy_name": "AmazonSESFullAccess", "actions": ["ses:*"], "resources": ["*"], "services": ["ses"]}
+    ],
+    "unanalyzed_managed_policies": ["arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"]
+  },
+  "ecs-worker-task-role": {
+    "service_access": {
+      "sqs": ["arn:aws:sqs:us-east-2:123456789012:job-queue", "arn:aws:sqs:us-east-2:123456789012:job-dlq"],
+      "s3": ["arn:aws:s3:::prod-company-backups/*"],
+      "secretsmanager": ["arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/db-abc123", "arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/worker/*"]
+    },
+    "allow_statements": [
+      {"source": "inline", "policy_name": "worker-sqs", "actions": ["sqs:ReceiveMessage","sqs:DeleteMessage","sqs:ChangeMessageVisibility","sqs:GetQueueAttributes"], "resources": ["arn:aws:sqs:us-east-2:123456789012:job-queue","arn:aws:sqs:us-east-2:123456789012:job-dlq"], "services": ["sqs"]},
+      {"source": "inline", "policy_name": "worker-s3", "actions": ["s3:PutObject","s3:GetObject"], "resources": ["arn:aws:s3:::prod-company-backups/*"], "services": ["s3"]},
+      {"source": "inline", "policy_name": "worker-secrets", "actions": ["secretsmanager:GetSecretValue"], "resources": ["arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/db-abc123","arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/worker/*"], "services": ["secretsmanager"]}
+    ],
+    "unanalyzed_managed_policies": []
+  },
+  "ecs-execution-role": {
+    "service_access": {
+      "ecr": ["arn:aws:ecr:us-east-2:123456789012:repository/*"],
+      "secretsmanager": ["arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/*"],
+      "logs": ["arn:aws:logs:us-east-2:123456789012:log-group:/ecs/*"]
+    },
+    "allow_statements": [
+      {"source": "managed", "policy_name": "AmazonECSTaskExecutionRolePolicy", "actions": ["ecr:GetAuthorizationToken","ecr:BatchCheckLayerAvailability","ecr:GetDownloadUrlForLayer","ecr:BatchGetImage","logs:CreateLogStream","logs:PutLogEvents"], "resources": ["*"], "services": ["ecr","logs"]}
+    ],
+    "unanalyzed_managed_policies": ["arn:aws:iam::aws:policy/AmazonECSTaskExecutionRolePolicy"]
+  },
+  "lambda-event-processor-role": {
+    "service_access": {
+      "dynamodb": ["arn:aws:dynamodb:us-east-2:123456789012:table/user-events/stream/*"],
+      "sns": ["arn:aws:sns:us-east-2:123456789012:alerts-topic"],
+      "logs": ["arn:aws:logs:us-east-2:123456789012:log-group:/aws/lambda/event-processor:*"]
+    },
+    "allow_statements": [
+      {"source": "inline", "policy_name": "dynamodb-stream", "actions": ["dynamodb:GetRecords","dynamodb:GetShardIterator","dynamodb:DescribeStream","dynamodb:ListStreams"], "resources": ["arn:aws:dynamodb:us-east-2:123456789012:table/user-events/stream/*"], "services": ["dynamodb"]},
+      {"source": "inline", "policy_name": "sns-publish", "actions": ["sns:Publish"], "resources": ["arn:aws:sns:us-east-2:123456789012:alerts-topic"], "services": ["sns"]}
+    ],
+    "unanalyzed_managed_policies": ["arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"]
+  },
+  "lambda-rotation-role": {
+    "service_access": {
+      "secretsmanager": ["arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/db-abc123"],
+      "rds": ["*"],
+      "logs": ["*"]
+    },
+    "allow_statements": [
+      {"source": "inline", "policy_name": "rotation-secrets", "actions": ["secretsmanager:GetSecretValue","secretsmanager:PutSecretValue","secretsmanager:UpdateSecretVersionStage","secretsmanager:DescribeSecret"], "resources": ["arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/db-abc123"], "services": ["secretsmanager"]}
+    ],
+    "unanalyzed_managed_policies": ["arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"]
+  },
+  "lambda-report-role": {
+    "service_access": {
+      "s3": ["arn:aws:s3:::prod-company-reports/*"],
+      "dynamodb": ["arn:aws:dynamodb:us-east-2:123456789012:table/user-events"],
+      "logs": ["*"]
+    },
+    "allow_statements": [
+      {"source": "inline", "policy_name": "report-access", "actions": ["s3:PutObject","dynamodb:Query","dynamodb:Scan"], "resources": ["arn:aws:s3:::prod-company-reports/*","arn:aws:dynamodb:us-east-2:123456789012:table/user-events"], "services": ["s3","dynamodb"]}
+    ],
+    "unanalyzed_managed_policies": []
+  }
+}

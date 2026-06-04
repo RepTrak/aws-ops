@@ -1,0 +1,16 @@
+{
+  "ReplicationGroups": [
+    {
+      "ReplicationGroupId": "prod-cache",
+      "Description": "Production Redis cache",
+      "Status": "available",
+      "NodeGroups": [{ "NodeGroupId": "0001", "Status": "available", "PrimaryEndpoint": { "Address": "prod-cache.xyz.ng.0001.use2.cache.amazonaws.com", "Port": 6379 } }],
+      "AtRestEncryptionEnabled": true,
+      "TransitEncryptionEnabled": true,
+      "SecurityGroups": [{ "SecurityGroupId": "sg-0cache44444", "Status": "active" }],
+      "CacheNodeType": "cache.r6g.large",
+      "MultiAZ": "enabled",
+      "NumCacheClusters": 2
+    }
+  ]
+}

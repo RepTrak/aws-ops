@@ -1,0 +1,10 @@
+{"logGroups": [
+  {"logGroupName": "/ecs/prod/api",       "retentionInDays": 30},
+  {"logGroupName": "/ecs/prod/worker",    "retentionInDays": 30},
+  {"logGroupName": "/ecs/prod/frontend",  "retentionInDays": 14},
+  {"logGroupName": "/ecs/prod/scheduler", "retentionInDays": 14},
+  {"logGroupName": "/aws/lambda/event-processor",  "retentionInDays": 7},
+  {"logGroupName": "/aws/lambda/db-rotation",      "retentionInDays": 7},
+  {"logGroupName": "/aws/lambda/report-generator", "retentionInDays": 7},
+  {"logGroupName": "/aws/rds/instance/prod-api-db/error", "retentionInDays": 90}
+]}

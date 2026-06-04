@@ -1,0 +1,4 @@
+{"Topics": [
+  {"TopicArn": "arn:aws:sns:us-east-2:123456789012:alerts-topic"},
+  {"TopicArn": "arn:aws:sns:us-east-2:123456789012:deployment-notifications"}
+]}

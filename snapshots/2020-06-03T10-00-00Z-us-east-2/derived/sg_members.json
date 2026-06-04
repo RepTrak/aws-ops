@@ -1,0 +1,15 @@
+{
+  "sg-0alb11111":     [{"resource_type": "load_balancer", "resource_id": "arn:aws:elasticloadbalancing:us-east-2:123456789012:loadbalancer/app/prod-alb/abc123def456", "name": "prod-alb"}],
+  "sg-0api11111":     [{"resource_type": "ecs_service", "resource_id": "arn:aws:ecs:us-east-2:123456789012:service/prod-cluster/api-service", "name": "api-service"}],
+  "sg-0worker22222":  [
+    {"resource_type": "ecs_service", "resource_id": "arn:aws:ecs:us-east-2:123456789012:service/prod-cluster/worker-service", "name": "worker-service"},
+    {"resource_type": "ecs_service", "resource_id": "arn:aws:ecs:us-east-2:123456789012:service/prod-cluster/scheduler-service", "name": "scheduler-service"}
+  ],
+  "sg-0frontend33333":[{"resource_type": "ecs_service", "resource_id": "arn:aws:ecs:us-east-2:123456789012:service/prod-cluster/frontend-service", "name": "frontend-service"}],
+  "sg-0rds33333":     [{"resource_type": "rds_instance", "resource_id": "prod-api-db"}],
+  "sg-0cache44444":   [{"resource_type": "elasticache", "resource_id": "prod-cache"}],
+  "sg-0lambda55555":  [
+    {"resource_type": "lambda", "resource_id": "arn:aws:lambda:us-east-2:123456789012:function:event-processor", "name": "event-processor"},
+    {"resource_type": "lambda", "resource_id": "arn:aws:lambda:us-east-2:123456789012:function:db-rotation", "name": "db-rotation"}
+  ]
+}

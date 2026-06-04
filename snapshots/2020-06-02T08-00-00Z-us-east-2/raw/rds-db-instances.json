@@ -1,0 +1,25 @@
+{
+  "DBInstances": [
+    {
+      "DBInstanceIdentifier": "prod-api-db",
+      "DBInstanceClass": "db.r6g.large",
+      "Engine": "postgres",
+      "EngineVersion": "15.4",
+      "DBInstanceStatus": "available",
+      "MasterUsername": "apiuser",
+      "Endpoint": { "Address": "prod-api-db.cluster-xyz.us-east-2.rds.amazonaws.com", "Port": 5432 },
+      "MultiAZ": true,
+      "StorageEncrypted": true,
+      "KmsKeyId": "arn:aws:kms:us-east-2:123456789012:key/key-rds-prod",
+      "VpcSecurityGroups": [{ "VpcSecurityGroupId": "sg-0rds33333", "Status": "active" }],
+      "DBSubnetGroup": { "DBSubnetGroupName": "prod-db-subnet-group" },
+      "AllocatedStorage": 100,
+      "BackupRetentionPeriod": 7,
+      "PerformanceInsightsEnabled": true,
+      "MasterUserSecret": {
+        "SecretArn": "arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/db-abc123",
+        "SecretStatus": "active"
+      }
+    }
+  ]
+}

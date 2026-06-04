@@ -1,0 +1,15 @@
+{
+  "arn:aws:elasticloadbalancing:us-east-2:123456789012:loadbalancer/app/prod-alb/abc123def456": {
+    "name": "prod-alb",
+    "scheme": "internet-facing",
+    "dns_name": "prod-alb-123456789.us-east-2.elb.amazonaws.com",
+    "target_groups": [
+      {"arn": "arn:aws:elasticloadbalancing:us-east-2:123456789012:targetgroup/api-tg/aaa111", "name": "api-tg"},
+      {"arn": "arn:aws:elasticloadbalancing:us-east-2:123456789012:targetgroup/frontend-tg/bbb222", "name": "frontend-tg"}
+    ],
+    "ecs_services": [
+      "arn:aws:ecs:us-east-2:123456789012:service/prod-cluster/api-service",
+      "arn:aws:ecs:us-east-2:123456789012:service/prod-cluster/frontend-service"
+    ]
+  }
+}

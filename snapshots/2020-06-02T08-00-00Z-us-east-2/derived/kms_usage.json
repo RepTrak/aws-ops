@@ -1,0 +1,15 @@
+{
+  "key-rds-prod": {
+    "alias": "alias/prod-rds",
+    "resources": [
+      {"resource_type": "rds_instance", "resource_id": "prod-api-db"}
+    ]
+  },
+  "key-secrets-prod": {
+    "alias": "alias/prod-secrets",
+    "resources": [
+      {"resource_type": "secret", "resource_id": "arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/db-abc123"},
+      {"resource_type": "secret", "resource_id": "arn:aws:secretsmanager:us-east-2:123456789012:secret:prod/api/jwt-def456"}
+    ]
+  }
+}

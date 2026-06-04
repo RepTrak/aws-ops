@@ -1,0 +1,10 @@
+{
+  "abc123xyz/auth-001": {
+    "api_id": "abc123xyz", "authorizer_id": "auth-001", "name": "cognito-jwt",
+    "type": "JWT",
+    "issuer": "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_ProdPool1",
+    "audience": ["prod-company-client"],
+    "cognito_pool_id": "us-east-2_ProdPool1",
+    "cognito_pool": {"name": "company-prod-users", "arn": "arn:aws:cognito-idp:us-east-2:123456789012:userpool/us-east-2_ProdPool1", "mfa": "OPTIONAL"}
+  }
+}

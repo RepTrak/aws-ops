@@ -1,0 +1,9 @@
+{
+  "arn:aws:dynamodb:us-east-2:123456789012:table/user-events/stream/2026-01-01T00:00:00.000": {
+    "table_name": "user-events",
+    "table_arn": "arn:aws:dynamodb:us-east-2:123456789012:table/user-events",
+    "lambda_consumers": [
+      {"function_arn": "arn:aws:lambda:us-east-2:123456789012:function:event-processor", "state": "Enabled", "batch_size": 100, "starting_position": "TRIM_HORIZON", "maximum_retry_attempts": 3, "bisect_batch_on_error": true}
+    ]
+  }
+}

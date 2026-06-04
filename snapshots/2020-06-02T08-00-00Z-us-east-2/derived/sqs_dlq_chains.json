@@ -1,0 +1,14 @@
+{
+  "arn:aws:sqs:us-east-2:123456789012:job-queue": {
+    "queue_url": "https://sqs.us-east-2.amazonaws.com/123456789012/job-queue",
+    "queue_name": "job-queue",
+    "dlq_arn": "arn:aws:sqs:us-east-2:123456789012:job-dlq",
+    "max_receive_count": 5
+  },
+  "arn:aws:sqs:us-east-2:123456789012:report-queue": {
+    "queue_url": "https://sqs.us-east-2.amazonaws.com/123456789012/report-queue",
+    "queue_name": "report-queue",
+    "dlq_arn": "arn:aws:sqs:us-east-2:123456789012:job-dlq",
+    "max_receive_count": 3
+  }
+}

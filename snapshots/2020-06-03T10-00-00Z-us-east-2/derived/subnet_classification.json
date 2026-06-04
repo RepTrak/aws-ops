@@ -1,0 +1,6 @@
+{
+  "subnet-0private-2a": {"vpc_id": "vpc-0prod1234", "az": "us-east-2a", "cidr": "10.0.1.0/24", "name": "prod-private-2a", "is_public": false, "map_public_ip_on_launch": false, "route_table_id": "rtb-private"},
+  "subnet-0private-2b": {"vpc_id": "vpc-0prod1234", "az": "us-east-2b", "cidr": "10.0.2.0/24", "name": "prod-private-2b", "is_public": false, "map_public_ip_on_launch": false, "route_table_id": "rtb-private"},
+  "subnet-0public-2a":  {"vpc_id": "vpc-0prod1234", "az": "us-east-2a", "cidr": "10.0.101.0/24", "name": "prod-public-2a",  "is_public": true,  "map_public_ip_on_launch": true,  "route_table_id": "rtb-public"},
+  "subnet-0public-2b":  {"vpc_id": "vpc-0prod1234", "az": "us-east-2b", "cidr": "10.0.102.0/24", "name": "prod-public-2b",  "is_public": true,  "map_public_ip_on_launch": true,  "route_table_id": "rtb-public"}
+}

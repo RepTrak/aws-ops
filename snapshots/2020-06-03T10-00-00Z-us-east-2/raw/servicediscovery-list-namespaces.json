@@ -1,0 +1,3 @@
+{"Namespaces": [
+  {"Id": "ns-prod001", "Name": "prod.local", "Type": "DNS_PRIVATE", "Arn": "arn:aws:servicediscovery:us-east-2:123456789012:namespace/ns-prod001"}
+]}

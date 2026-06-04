@@ -1,0 +1,44 @@
+{
+  "arn:aws:ecs:us-east-2:123456789012:service/prod-cluster/api-service": {
+    "service_name": "api-service",
+    "cluster_arn": "arn:aws:ecs:us-east-2:123456789012:cluster/prod-cluster",
+    "task_definition_arn": "arn:aws:ecs:us-east-2:123456789012:task-definition/api:38",
+    "task_role_arn": "arn:aws:iam::123456789012:role/ecs-api-task-role",
+    "execution_role_arn": "arn:aws:iam::123456789012:role/ecs-execution-role",
+    "desired_count": 2, "running_count": 2, "pending_count": 0,
+    "containers": [{"name": "api", "image": "123456789012.dkr.ecr.us-east-2.amazonaws.com/api:sha256-old001", "log_group": "/ecs/prod/api", "port_mappings": [{"containerPort": 8080, "protocol": "tcp"}]}],
+    "efs_volumes": [],
+    "cloud_map": [{"registry_arn": "arn:aws:servicediscovery:us-east-2:123456789012:service/srv-api001", "service_name": "api", "namespace_id": "ns-prod001"}],
+    "subnets": ["subnet-0private-2a", "subnet-0private-2b"],
+    "security_groups": ["sg-0api11111"],
+    "load_balancer_target_groups": ["arn:aws:elasticloadbalancing:us-east-2:123456789012:targetgroup/api-tg/aaa111"]
+  },
+  "arn:aws:ecs:us-east-2:123456789012:service/prod-cluster/worker-service": {
+    "service_name": "worker-service",
+    "cluster_arn": "arn:aws:ecs:us-east-2:123456789012:cluster/prod-cluster",
+    "task_definition_arn": "arn:aws:ecs:us-east-2:123456789012:task-definition/worker:14",
+    "task_role_arn": "arn:aws:iam::123456789012:role/ecs-worker-task-role",
+    "execution_role_arn": "arn:aws:iam::123456789012:role/ecs-execution-role",
+    "desired_count": 2, "running_count": 1, "pending_count": 1,
+    "containers": [{"name": "worker", "image": "123456789012.dkr.ecr.us-east-2.amazonaws.com/worker:sha256-old002", "log_group": "/ecs/prod/worker", "port_mappings": []}],
+    "efs_volumes": [{"volume_name": "shared-data", "file_system_id": "fs-0shared001", "access_point_id": "fsap-0shared001"}],
+    "cloud_map": [{"registry_arn": "arn:aws:servicediscovery:us-east-2:123456789012:service/srv-worker001", "service_name": "worker", "namespace_id": "ns-prod001"}],
+    "subnets": ["subnet-0private-2a", "subnet-0private-2b"],
+    "security_groups": ["sg-0worker22222"],
+    "load_balancer_target_groups": []
+  },
+  "arn:aws:ecs:us-east-2:123456789012:service/prod-cluster/frontend-service": {
+    "service_name": "frontend-service",
+    "cluster_arn": "arn:aws:ecs:us-east-2:123456789012:cluster/prod-cluster",
+    "task_definition_arn": "arn:aws:ecs:us-east-2:123456789012:task-definition/frontend:7",
+    "task_role_arn": "arn:aws:iam::123456789012:role/ecs-frontend-task-role",
+    "execution_role_arn": "arn:aws:iam::123456789012:role/ecs-execution-role",
+    "desired_count": 2, "running_count": 2, "pending_count": 0,
+    "containers": [{"name": "frontend", "image": "123456789012.dkr.ecr.us-east-2.amazonaws.com/frontend:sha256-old003", "log_group": "/ecs/prod/frontend", "port_mappings": [{"containerPort": 3000, "protocol": "tcp"}]}],
+    "efs_volumes": [],
+    "cloud_map": [],
+    "subnets": ["subnet-0private-2a", "subnet-0private-2b"],
+    "security_groups": ["sg-0frontend33333"],
+    "load_balancer_target_groups": ["arn:aws:elasticloadbalancing:us-east-2:123456789012:targetgroup/frontend-tg/bbb222"]
+  }
+}

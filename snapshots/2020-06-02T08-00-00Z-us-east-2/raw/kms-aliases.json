@@ -1,0 +1,5 @@
+{"Aliases": [
+  {"AliasName": "alias/prod-rds",     "AliasArn": "arn:aws:kms:us-east-2:123456789012:alias/prod-rds",     "TargetKeyId": "key-rds-prod"},
+  {"AliasName": "alias/prod-secrets", "AliasArn": "arn:aws:kms:us-east-2:123456789012:alias/prod-secrets", "TargetKeyId": "key-secrets-prod"},
+  {"AliasName": "alias/aws/rds",      "AliasArn": "arn:aws:kms:us-east-2:123456789012:alias/aws/rds",      "TargetKeyId": "key-aws-rds"}
+]}

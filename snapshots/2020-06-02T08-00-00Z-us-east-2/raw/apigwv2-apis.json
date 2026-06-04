@@ -1,0 +1,8 @@
+{"Items": [
+  {
+    "ApiId": "abc123xyz",
+    "Name": "prod-http-api",
+    "ProtocolType": "HTTP",
+    "ApiEndpoint": "https://abc123xyz.execute-api.us-east-2.amazonaws.com"
+  }
+]}

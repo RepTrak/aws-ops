@@ -1,0 +1,6 @@
+{"Buckets": [
+  {"Name": "prod-company-assets", "CreationDate": "2024-01-15T09:00:00Z"},
+  {"Name": "prod-company-backups", "CreationDate": "2024-01-15T09:05:00Z"},
+  {"Name": "prod-company-logs", "CreationDate": "2024-01-15T09:10:00Z"},
+  {"Name": "prod-company-reports", "CreationDate": "2024-03-01T12:00:00Z"}
+]}

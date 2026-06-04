@@ -1,0 +1,7 @@
+{
+  "timestamp_utc": "2020-06-02T08-00-00Z",
+  "region": "us-east-2",
+  "profile": "prod",
+  "with_secret_values": false,
+  "all_regions_mode": false
+}

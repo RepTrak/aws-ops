@@ -1,0 +1,42 @@
+{
+  "Functions": [
+    {
+      "FunctionName": "event-processor",
+      "FunctionArn": "arn:aws:lambda:us-east-2:123456789012:function:event-processor",
+      "Runtime": "python3.12",
+      "Handler": "handler.process",
+      "Role": "arn:aws:iam::123456789012:role/lambda-event-processor-role",
+      "Timeout": 30,
+      "MemorySize": 256,
+      "VpcConfig": {
+        "VpcId": "vpc-0prod1234",
+        "SubnetIds": ["subnet-0private-2a", "subnet-0private-2b"],
+        "SecurityGroupIds": ["sg-0lambda55555"]
+      }
+    },
+    {
+      "FunctionName": "db-rotation",
+      "FunctionArn": "arn:aws:lambda:us-east-2:123456789012:function:db-rotation",
+      "Runtime": "python3.12",
+      "Handler": "rotation.handler",
+      "Role": "arn:aws:iam::123456789012:role/lambda-rotation-role",
+      "Timeout": 60,
+      "MemorySize": 128,
+      "VpcConfig": {
+        "VpcId": "vpc-0prod1234",
+        "SubnetIds": ["subnet-0private-2a", "subnet-0private-2b"],
+        "SecurityGroupIds": ["sg-0lambda55555"]
+      }
+    },
+    {
+      "FunctionName": "report-generator",
+      "FunctionArn": "arn:aws:lambda:us-east-2:123456789012:function:report-generator",
+      "Runtime": "nodejs20.x",
+      "Handler": "index.handler",
+      "Role": "arn:aws:iam::123456789012:role/lambda-report-role",
+      "Timeout": 300,
+      "MemorySize": 512,
+      "VpcConfig": {}
+    }
+  ]
+}

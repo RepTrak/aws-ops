@@ -1,0 +1,22 @@
+{
+  "edges": [
+    {"from_cidr": "0.0.0.0/0",    "to_sg": "sg-0alb11111",      "protocol": "tcp", "from_port": 443,  "to_port": 443},
+    {"from_cidr": "0.0.0.0/0",    "to_sg": "sg-0alb11111",      "protocol": "tcp", "from_port": 80,   "to_port": 80},
+    {"from_sg": "sg-0alb11111",   "to_sg": "sg-0api11111",       "protocol": "tcp", "from_port": 8080, "to_port": 8080},
+    {"from_sg": "sg-0alb11111",   "to_sg": "sg-0frontend33333",  "protocol": "tcp", "from_port": 3000, "to_port": 3000},
+    {"from_sg": "sg-0api11111",   "to_sg": "sg-0rds33333",       "protocol": "tcp", "from_port": 5432, "to_port": 5432},
+    {"from_sg": "sg-0worker22222","to_sg": "sg-0rds33333",       "protocol": "tcp", "from_port": 5432, "to_port": 5432},
+    {"from_sg": "sg-0api11111",   "to_sg": "sg-0cache44444",     "protocol": "tcp", "from_port": 6379, "to_port": 6379},
+    {"from_sg": "sg-0worker22222","to_sg": "sg-0cache44444",     "protocol": "tcp", "from_port": 6379, "to_port": 6379},
+    {"from_sg": "sg-0lambda55555","to_sg": "sg-0rds33333",       "protocol": "tcp", "from_port": 5432, "to_port": 5432}
+  ],
+  "sg_names": {
+    "sg-0alb11111":      "alb-sg",
+    "sg-0api11111":      "api-service-sg",
+    "sg-0worker22222":   "worker-service-sg",
+    "sg-0frontend33333": "frontend-service-sg",
+    "sg-0rds33333":      "prod-rds-sg",
+    "sg-0cache44444":    "prod-cache-sg",
+    "sg-0lambda55555":   "lambda-sg"
+  }
+}

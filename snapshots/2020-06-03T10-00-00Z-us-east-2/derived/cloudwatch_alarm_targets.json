@@ -1,0 +1,35 @@
+{
+  "arn:aws:cloudwatch:us-east-2:123456789012:alarm:api-cpu-high": {
+    "alarm_name": "api-cpu-high", "metric": "CPUUtilization", "namespace": "AWS/ECS",
+    "resource_type": "ecs_service", "resource_ids": {"cluster": "prod-cluster", "service": "api-service"},
+    "threshold": 80.0, "comparison": "GreaterThanOrEqualToThreshold", "state": "OK",
+    "alarm_actions": [{"arn": "arn:aws:application-autoscaling:us-east-2:123456789012:scalingPolicy:ecs/prod-cluster/api-service/cpu-scale-out", "type": "autoscaling_policy"}]
+  },
+  "arn:aws:cloudwatch:us-east-2:123456789012:alarm:api-memory-high": {
+    "alarm_name": "api-memory-high", "metric": "MemoryUtilization", "namespace": "AWS/ECS",
+    "resource_type": "ecs_service", "resource_ids": {"cluster": "prod-cluster", "service": "api-service"},
+    "threshold": 85.0, "comparison": "GreaterThanOrEqualToThreshold", "state": "OK",
+    "alarm_actions": [{"arn": "arn:aws:sns:us-east-2:123456789012:alerts-topic", "type": "sns_topic"}]
+  },
+  "arn:aws:cloudwatch:us-east-2:123456789012:alarm:rds-cpu-high": {
+    "alarm_name": "rds-cpu-high", "metric": "CPUUtilization", "namespace": "AWS/RDS",
+    "resource_type": "rds_instance", "resource_ids": {"db_instance": "prod-api-db"},
+    "threshold": 90.0, "comparison": "GreaterThanOrEqualToThreshold", "state": "OK",
+    "alarm_actions": [{"arn": "arn:aws:sns:us-east-2:123456789012:alerts-topic", "type": "sns_topic"}]
+  },
+  "arn:aws:cloudwatch:us-east-2:123456789012:alarm:job-queue-depth": {
+    "alarm_name": "job-queue-depth", "metric": "ApproximateNumberOfMessagesVisible", "namespace": "AWS/SQS",
+    "resource_type": "sqs_queue", "resource_ids": {"queue": "job-queue"},
+    "threshold": 1000.0, "comparison": "GreaterThanOrEqualToThreshold", "state": "OK",
+    "alarm_actions": [
+      {"arn": "arn:aws:application-autoscaling:us-east-2:123456789012:scalingPolicy:ecs/prod-cluster/worker-service/queue-scale", "type": "autoscaling_policy"},
+      {"arn": "arn:aws:sns:us-east-2:123456789012:alerts-topic", "type": "sns_topic"}
+    ]
+  },
+  "arn:aws:cloudwatch:us-east-2:123456789012:alarm:cache-cpu": {
+    "alarm_name": "cache-cpu", "metric": "CPUUtilization", "namespace": "AWS/ElastiCache",
+    "resource_type": "elasticache", "resource_ids": {"replication_group": "prod-cache"},
+    "threshold": 75.0, "comparison": "GreaterThanOrEqualToThreshold", "state": "OK",
+    "alarm_actions": [{"arn": "arn:aws:sns:us-east-2:123456789012:alerts-topic", "type": "sns_topic"}]
+  }
+}

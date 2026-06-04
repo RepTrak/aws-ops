@@ -1,0 +1,10 @@
+{"Roles": [
+  {"RoleName": "ecs-api-task-role", "Arn": "arn:aws:iam::123456789012:role/ecs-api-task-role", "Description": "Task role for api-service"},
+  {"RoleName": "ecs-worker-task-role", "Arn": "arn:aws:iam::123456789012:role/ecs-worker-task-role", "Description": "Task role for worker-service"},
+  {"RoleName": "ecs-frontend-task-role", "Arn": "arn:aws:iam::123456789012:role/ecs-frontend-task-role", "Description": "Task role for frontend-service"},
+  {"RoleName": "ecs-execution-role", "Arn": "arn:aws:iam::123456789012:role/ecs-execution-role", "Description": "ECS task execution role"},
+  {"RoleName": "lambda-event-processor-role", "Arn": "arn:aws:iam::123456789012:role/lambda-event-processor-role"},
+  {"RoleName": "lambda-rotation-role", "Arn": "arn:aws:iam::123456789012:role/lambda-rotation-role"},
+  {"RoleName": "lambda-report-role", "Arn": "arn:aws:iam::123456789012:role/lambda-report-role"},
+  {"RoleName": "codepipeline-role", "Arn": "arn:aws:iam::123456789012:role/codepipeline-role"}
+]}

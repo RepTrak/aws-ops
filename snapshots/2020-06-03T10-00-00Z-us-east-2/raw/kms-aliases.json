@@ -1,0 +1,7 @@
+{"Aliases": [
+  {"AliasName": "alias/prod-rds",     "AliasArn": "arn:aws:kms:us-east-2:123456789012:alias/prod-rds",     "TargetKeyId": "key-rds-prod"},
+  {"AliasName": "alias/prod-cache",   "AliasArn": "arn:aws:kms:us-east-2:123456789012:alias/prod-cache",   "TargetKeyId": "key-cache-prod"},
+  {"AliasName": "alias/prod-secrets", "AliasArn": "arn:aws:kms:us-east-2:123456789012:alias/prod-secrets", "TargetKeyId": "key-secrets-prod"},
+  {"AliasName": "alias/prod-s3",      "AliasArn": "arn:aws:kms:us-east-2:123456789012:alias/prod-s3",      "TargetKeyId": "key-s3-prod"},
+  {"AliasName": "alias/aws/rds",      "AliasArn": "arn:aws:kms:us-east-2:123456789012:alias/aws/rds",      "TargetKeyId": "key-aws-rds"}
+]}
