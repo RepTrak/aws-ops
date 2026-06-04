@@ -167,16 +167,27 @@ run_snapshot_for_region() {
     aws "${AWS_ARGS[@]}" "$@" > "$outfile"
   }
 
+  # Resolve OS-level timeout command once for the whole region run.
+  _TIMEOUT_CMD=""
+  if command -v gtimeout >/dev/null 2>&1; then _TIMEOUT_CMD="gtimeout 90"
+  elif command -v timeout  >/dev/null 2>&1; then _TIMEOUT_CMD="timeout 90"
+  fi
+
   safe_aws_json() {
     local outfile="$1"
     shift
     echo "→ $outfile"
-    if aws "${AWS_ARGS[@]}" "$@" > "$outfile" 2>"${outfile}.stderr"; then
+    if ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" "$@" > "$outfile" 2>"${outfile}.stderr"; then
       rm -f "${outfile}.stderr"
     else
-      echo "WARN: failed in ${region}: aws $*" >&2
+      local _exit=$?
       rm -f "${outfile}.stderr"
       echo '{}' > "$outfile"
+      if [[ $_exit -eq 124 ]]; then
+        echo "WARN: timed out after 90s: aws $*" >&2
+      else
+        echo "WARN: failed in ${region}: aws $*" >&2
+      fi
     fi
   }
 
