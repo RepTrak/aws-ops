@@ -68,7 +68,7 @@ function mkEdge(
     // React Flow injects this marker directly into the canvas SVG, which fixes
     // orient="auto" rotation and gives each edge type its own colored arrowhead.
     markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color } as any,
-    data: { relationship: rel, description, port, animated: rel === 'dataflow' },
+    data: { relationship: rel, description, port, animated: false },
   }
 }
 
