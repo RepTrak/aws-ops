@@ -45,6 +45,8 @@ service, and drag nodes to arrange them however makes sense for the problem you 
 There is no predetermined layout or fixed diagram size; the canvas expands as you add more
 resources.
 
+![Navigator screenshot — demo snapshot with RDS node selected and AI Brief open](navigator.jpg)
+
 ### Empty canvas
 
 The canvas starts empty every session. Resources appear only when you explicitly place them:
