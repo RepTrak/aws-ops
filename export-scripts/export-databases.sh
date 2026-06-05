@@ -20,7 +20,7 @@ rds_pg_names="$(jq -r '.DBParameterGroups[]?.DBParameterGroupName // empty' \
 : > "${OUT_DIR}/raw/rds-db-parameter-group-contents.ndjson"
 while IFS= read -r pg; do
   [[ -z "$pg" ]] && continue
-  aws "${AWS_ARGS[@]}" rds describe-db-parameters --db-parameter-group-name "$pg" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" rds describe-db-parameters --db-parameter-group-name "$pg" 2>/dev/null | \
     jq -c --arg pg "$pg" '{parameter_group_name:$pg, data:.}' \
     >> "${OUT_DIR}/raw/rds-db-parameter-group-contents.ndjson" || true
 done <<< "$rds_pg_names"
@@ -33,10 +33,10 @@ proxy_names="$(jq -r '.DBProxies[]?.DBProxyName // empty' \
 : > "${OUT_DIR}/raw/rds-db-proxy-target-groups.ndjson"
 while IFS= read -r proxy; do
   [[ -z "$proxy" ]] && continue
-  aws "${AWS_ARGS[@]}" rds describe-db-proxy-targets --db-proxy-name "$proxy" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" rds describe-db-proxy-targets --db-proxy-name "$proxy" 2>/dev/null | \
     jq -c --arg p "$proxy" '{db_proxy_name:$p, data:.}' \
     >> "${OUT_DIR}/raw/rds-db-proxy-targets.ndjson" || true
-  aws "${AWS_ARGS[@]}" rds describe-db-proxy-target-groups --db-proxy-name "$proxy" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" rds describe-db-proxy-target-groups --db-proxy-name "$proxy" 2>/dev/null | \
     jq -c --arg p "$proxy" '{db_proxy_name:$p, data:.}' \
     >> "${OUT_DIR}/raw/rds-db-proxy-target-groups.ndjson" || true
 done <<< "$proxy_names"
@@ -53,7 +53,7 @@ rs_cluster_ids="$(jq -r '.Clusters[]?.ClusterIdentifier // empty' \
 : > "${OUT_DIR}/raw/redshift-logging-status.ndjson"
 while IFS= read -r cid; do
   [[ -z "$cid" ]] && continue
-  aws "${AWS_ARGS[@]}" redshift describe-logging-status --cluster-identifier "$cid" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" redshift describe-logging-status --cluster-identifier "$cid" 2>/dev/null | \
     jq -c --arg id "$cid" '{cluster_identifier:$id, data:.}' \
     >> "${OUT_DIR}/raw/redshift-logging-status.ndjson" || true
 done <<< "$rs_cluster_ids"
@@ -63,7 +63,7 @@ rs_pg_names="$(jq -r '.ParameterGroups[]?.ParameterGroupName // empty' \
 : > "${OUT_DIR}/raw/redshift-parameter-group-contents.ndjson"
 while IFS= read -r pg; do
   [[ -z "$pg" ]] && continue
-  aws "${AWS_ARGS[@]}" redshift describe-cluster-parameters \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" redshift describe-cluster-parameters \
     --parameter-group-name "$pg" 2>/dev/null | \
     jq -c --arg pg "$pg" '{parameter_group_name:$pg, data:.}' \
     >> "${OUT_DIR}/raw/redshift-parameter-group-contents.ndjson" || true
@@ -77,7 +77,7 @@ rs_ns_names="$(jq -r '.namespaces[]?.namespaceName // empty' \
 : > "${OUT_DIR}/raw/redshift-serverless-namespace-details.ndjson"
 while IFS= read -r ns; do
   [[ -z "$ns" ]] && continue
-  aws "${AWS_ARGS[@]}" redshift-serverless get-namespace --namespace-name "$ns" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" redshift-serverless get-namespace --namespace-name "$ns" 2>/dev/null | \
     jq -c --arg ns "$ns" '{namespace_name:$ns, data:.}' \
     >> "${OUT_DIR}/raw/redshift-serverless-namespace-details.ndjson" || true
 done <<< "$rs_ns_names"
@@ -88,7 +88,7 @@ rs_wg_names="$(jq -r '.workgroups[]?.workgroupName // empty' \
 : > "${OUT_DIR}/raw/redshift-serverless-workgroup-details.ndjson"
 while IFS= read -r wg; do
   [[ -z "$wg" ]] && continue
-  aws "${AWS_ARGS[@]}" redshift-serverless get-workgroup --workgroup-name "$wg" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" redshift-serverless get-workgroup --workgroup-name "$wg" 2>/dev/null | \
     jq -c --arg wg "$wg" '{workgroup_name:$wg, data:.}' \
     >> "${OUT_DIR}/raw/redshift-serverless-workgroup-details.ndjson" || true
 done <<< "$rs_wg_names"
@@ -107,7 +107,7 @@ docdb_pg_names="$(jq -r '.DBClusterParameterGroups[]?.DBClusterParameterGroupNam
 : > "${OUT_DIR}/raw/docdb-parameter-group-contents.ndjson"
 while IFS= read -r pg; do
   [[ -z "$pg" ]] && continue
-  aws "${AWS_ARGS[@]}" docdb describe-db-cluster-parameters \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" docdb describe-db-cluster-parameters \
     --db-cluster-parameter-group-name "$pg" 2>/dev/null | \
     jq -c --arg pg "$pg" '{parameter_group_name:$pg, data:.}' \
     >> "${OUT_DIR}/raw/docdb-parameter-group-contents.ndjson" || true
@@ -121,10 +121,10 @@ ddb_table_names="$(jq -r '.TableNames[]? // empty' \
 : > "${OUT_DIR}/raw/dynamodb-continuous-backups.ndjson"
 while IFS= read -r table; do
   [[ -z "$table" ]] && continue
-  aws "${AWS_ARGS[@]}" dynamodb describe-table --table-name "$table" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" dynamodb describe-table --table-name "$table" 2>/dev/null | \
     jq -c --arg t "$table" '{table_name:$t, data:.}' \
     >> "${OUT_DIR}/raw/dynamodb-table-details.ndjson" || true
-  aws "${AWS_ARGS[@]}" dynamodb describe-continuous-backups --table-name "$table" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" dynamodb describe-continuous-backups --table-name "$table" 2>/dev/null | \
     jq -c --arg t "$table" '{table_name:$t, data:.}' \
     >> "${OUT_DIR}/raw/dynamodb-continuous-backups.ndjson" || true
 done <<< "$ddb_table_names"

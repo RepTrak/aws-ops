@@ -23,7 +23,7 @@ lt_ids="$(jq -r '.LaunchTemplates[]?.LaunchTemplateId // empty' \
 : > "${OUT_DIR}/raw/ec2-launch-template-versions.ndjson"
 while IFS= read -r lt; do
   [[ -z "$lt" ]] && continue
-  aws "${AWS_ARGS[@]}" ec2 describe-launch-template-versions \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" ec2 describe-launch-template-versions \
     --launch-template-id "$lt" --versions '$Default' '$Latest' 2>/dev/null | \
     jq -c --arg lt "$lt" '{launch_template_id:$lt, data:.}' \
     >> "${OUT_DIR}/raw/ec2-launch-template-versions.ndjson" || true

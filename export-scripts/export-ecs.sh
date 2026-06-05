@@ -23,7 +23,7 @@ if [[ -n "$cluster_arns" ]]; then
   if [[ -n "$task_def_arns" ]]; then
     while IFS= read -r arn; do
       [[ -z "$arn" ]] && continue
-      aws "${AWS_ARGS[@]}" ecs describe-task-definition --task-definition "$arn" --include TAGS 2>/dev/null | \
+      ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" ecs describe-task-definition --task-definition "$arn" --include TAGS 2>/dev/null | \
         jq -c --arg arn "$arn" '{task_definition_arn:$arn, data:.}' \
         >> "${OUT_DIR}/raw/ecs-describe-task-definitions.ndjson" || true
     done <<< "$task_def_arns"
@@ -39,7 +39,7 @@ if [[ -n "$cluster_arns" ]]; then
     if [[ -s "$service_arns_file" ]]; then
       while IFS= read -r batch; do
         [[ -z "$batch" ]] && continue
-        aws "${AWS_ARGS[@]}" ecs describe-services --cluster "$cluster" --services $batch \
+        ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" ecs describe-services --cluster "$cluster" --services $batch \
           --include TAGS 2>/dev/null | \
           jq -c --arg cluster "$cluster" '{cluster:$cluster, data:.}' \
           >> "${OUT_DIR}/raw/ecs-services.ndjson" || true
@@ -53,7 +53,7 @@ if [[ -n "$cluster_arns" ]]; then
     if [[ -s "$task_arns_file" ]]; then
       while IFS= read -r batch; do
         [[ -z "$batch" ]] && continue
-        aws "${AWS_ARGS[@]}" ecs describe-tasks --cluster "$cluster" --tasks $batch \
+        ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" ecs describe-tasks --cluster "$cluster" --tasks $batch \
           --include TAGS 2>/dev/null | \
           jq -c --arg cluster "$cluster" '{cluster:$cluster, data:.}' \
           >> "${OUT_DIR}/raw/ecs-tasks.ndjson" || true
@@ -68,7 +68,7 @@ if [[ -n "$cluster_arns" ]]; then
     if [[ -s "$ci_arns_file" ]]; then
       while IFS= read -r batch; do
         [[ -z "$batch" ]] && continue
-        aws "${AWS_ARGS[@]}" ecs describe-container-instances --cluster "$cluster" \
+        ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" ecs describe-container-instances --cluster "$cluster" \
           --container-instances $batch \
           --include TAGS CONTAINER_INSTANCE_HEALTH 2>/dev/null | \
           jq -c --arg cluster "$cluster" '{cluster:$cluster, data:.}' \

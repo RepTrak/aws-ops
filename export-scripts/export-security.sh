@@ -15,10 +15,10 @@ kms_key_ids="$(jq -r '.Keys[]?.KeyId // empty' \
 : > "${OUT_DIR}/raw/kms-key-policies.ndjson"
 while IFS= read -r key_id; do
   [[ -z "$key_id" ]] && continue
-  aws "${AWS_ARGS[@]}" kms describe-key --key-id "$key_id" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" kms describe-key --key-id "$key_id" 2>/dev/null | \
     jq -c --arg id "$key_id" '{key_id:$id, data:.}' \
     >> "${OUT_DIR}/raw/kms-key-details.ndjson" || true
-  if kms_policy_out="$(aws "${AWS_ARGS[@]}" kms get-key-policy \
+  if kms_policy_out="$(${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" kms get-key-policy \
       --key-id "$key_id" --policy-name default 2>/dev/null)"; then
     echo "$kms_policy_out" | jq -c --arg id "$key_id" '{key_id:$id, data:.}' \
       >> "${OUT_DIR}/raw/kms-key-policies.ndjson"
@@ -33,10 +33,10 @@ trail_arns="$(jq -r '.trailList[]?.TrailARN // empty' \
 : > "${OUT_DIR}/raw/cloudtrail-event-selectors.ndjson"
 while IFS= read -r arn; do
   [[ -z "$arn" ]] && continue
-  aws "${AWS_ARGS[@]}" cloudtrail get-trail-status --name "$arn" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" cloudtrail get-trail-status --name "$arn" 2>/dev/null | \
     jq -c --arg arn "$arn" '{trail_arn:$arn, data:.}' \
     >> "${OUT_DIR}/raw/cloudtrail-trail-status.ndjson" || true
-  aws "${AWS_ARGS[@]}" cloudtrail get-event-selectors \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" cloudtrail get-event-selectors \
     --trail-name "$arn" 2>/dev/null | \
     jq -c --arg arn "$arn" '{trail_arn:$arn, data:.}' \
     >> "${OUT_DIR}/raw/cloudtrail-event-selectors.ndjson" || true
@@ -54,7 +54,7 @@ gd_ids="$(jq -r '.DetectorIds[]? // empty' \
 : > "${OUT_DIR}/raw/guardduty-detector-details.ndjson"
 while IFS= read -r det_id; do
   [[ -z "$det_id" ]] && continue
-  aws "${AWS_ARGS[@]}" guardduty get-detector --detector-id "$det_id" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" guardduty get-detector --detector-id "$det_id" 2>/dev/null | \
     jq -c --arg id "$det_id" '{detector_id:$id, data:.}' \
     >> "${OUT_DIR}/raw/guardduty-detector-details.ndjson" || true
 done <<< "$gd_ids"
@@ -70,7 +70,7 @@ analyzer_arns="$(jq -r '.analyzers[]?.arn // empty' \
 : > "${OUT_DIR}/raw/accessanalyzer-findings.ndjson"
 while IFS= read -r arn; do
   [[ -z "$arn" ]] && continue
-  aws "${AWS_ARGS[@]}" accessanalyzer list-findings \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" accessanalyzer list-findings \
     --analyzer-arn "$arn" 2>/dev/null | \
     jq -c --arg arn "$arn" '{analyzer_arn:$arn, data:.}' \
     >> "${OUT_DIR}/raw/accessanalyzer-findings.ndjson" || true
@@ -89,10 +89,10 @@ if [[ "$SKIP_GLOBALS" != "true" ]]; then
   : > "${OUT_DIR}/raw/organizations-scp-details.ndjson"
   while IFS= read -r scp_id; do
     [[ -z "$scp_id" ]] && continue
-    scp_policy_out="$(aws "${AWS_ARGS[@]}" organizations describe-policy \
+    scp_policy_out="$(${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" organizations describe-policy \
       --policy-id "$scp_id" 2>/dev/null)" || scp_policy_out="{}"
     [[ -z "$scp_policy_out" ]] && scp_policy_out="{}"
-    scp_targets_out="$(aws "${AWS_ARGS[@]}" organizations list-targets-for-policy \
+    scp_targets_out="$(${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" organizations list-targets-for-policy \
       --policy-id "$scp_id" 2>/dev/null)" || scp_targets_out="{}"
     [[ -z "$scp_targets_out" ]] && scp_targets_out="{}"
     jq -cn \

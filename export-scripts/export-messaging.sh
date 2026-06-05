@@ -11,7 +11,7 @@ queue_urls="$(jq -r '.QueueUrls[]? // empty' "${OUT_DIR}/raw/sqs-queues.json" 2>
 : > "${OUT_DIR}/raw/sqs-queue-attributes.ndjson"
 while IFS= read -r url; do
   [[ -z "$url" ]] && continue
-  aws "${AWS_ARGS[@]}" sqs get-queue-attributes \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" sqs get-queue-attributes \
     --queue-url "$url" --attribute-names All 2>/dev/null | \
     jq -c --arg url "$url" '{queue_url:$url, data:.}' \
     >> "${OUT_DIR}/raw/sqs-queue-attributes.ndjson" || true
@@ -24,7 +24,7 @@ topic_arns="$(jq -r '.Topics[]?.TopicArn // empty' "${OUT_DIR}/raw/sns-topics.js
 : > "${OUT_DIR}/raw/sns-topic-attributes.ndjson"
 while IFS= read -r arn; do
   [[ -z "$arn" ]] && continue
-  aws "${AWS_ARGS[@]}" sns get-topic-attributes --topic-arn "$arn" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" sns get-topic-attributes --topic-arn "$arn" 2>/dev/null | \
     jq -c --arg arn "$arn" '{topic_arn:$arn, data:.}' \
     >> "${OUT_DIR}/raw/sns-topic-attributes.ndjson" || true
 done <<< "$topic_arns"
@@ -41,7 +41,7 @@ while IFS= read -r bus; do
     >> "${OUT_DIR}/raw/events-rules.ndjson"
   while IFS= read -r rule; do
     [[ -z "$rule" ]] && continue
-    aws "${AWS_ARGS[@]}" events list-targets-by-rule \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" events list-targets-by-rule \
       --rule "$rule" --event-bus-name "$bus" 2>/dev/null | \
       jq -c --arg rule "$rule" --arg bus "$bus" \
         '{rule_name:$rule, event_bus_name:$bus, data:.}' \
@@ -60,7 +60,7 @@ sm_arns="$(jq -r '.stateMachines[]?.stateMachineArn // empty' \
 : > "${OUT_DIR}/raw/stepfunctions-state-machine-details.ndjson"
 while IFS= read -r arn; do
   [[ -z "$arn" ]] && continue
-  aws "${AWS_ARGS[@]}" stepfunctions describe-state-machine \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" stepfunctions describe-state-machine \
     --state-machine-arn "$arn" 2>/dev/null | \
     jq -c --arg arn "$arn" '{state_machine_arn:$arn, data:.}' \
     >> "${OUT_DIR}/raw/stepfunctions-state-machine-details.ndjson" || true
@@ -73,7 +73,7 @@ broker_ids="$(jq -r '.BrokerSummaries[]?.BrokerId // empty' \
 : > "${OUT_DIR}/raw/mq-broker-details.ndjson"
 while IFS= read -r broker_id; do
   [[ -z "$broker_id" ]] && continue
-  aws "${AWS_ARGS[@]}" mq describe-broker --broker-id "$broker_id" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" mq describe-broker --broker-id "$broker_id" 2>/dev/null | \
     jq -c --arg id "$broker_id" '{broker_id:$id, data:.}' \
     >> "${OUT_DIR}/raw/mq-broker-details.ndjson" || true
 done <<< "$broker_ids"
@@ -85,7 +85,7 @@ kafka_arns="$(jq -r '.ClusterInfoList[]?.ClusterArn // empty' \
 : > "${OUT_DIR}/raw/kafka-cluster-details.ndjson"
 while IFS= read -r arn; do
   [[ -z "$arn" ]] && continue
-  aws "${AWS_ARGS[@]}" kafka describe-cluster-v2 --cluster-arn "$arn" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" kafka describe-cluster-v2 --cluster-arn "$arn" 2>/dev/null | \
     jq -c --arg arn "$arn" '{cluster_arn:$arn, data:.}' \
     >> "${OUT_DIR}/raw/kafka-cluster-details.ndjson" || true
 done <<< "$kafka_arns"
@@ -97,7 +97,7 @@ kinesis_stream_names="$(jq -r '.StreamNames[]? // empty' \
 : > "${OUT_DIR}/raw/kinesis-stream-details.ndjson"
 while IFS= read -r stream; do
   [[ -z "$stream" ]] && continue
-  aws "${AWS_ARGS[@]}" kinesis describe-stream-summary \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" kinesis describe-stream-summary \
     --stream-name "$stream" 2>/dev/null | \
     jq -c --arg s "$stream" '{stream_name:$s, data:.}' \
     >> "${OUT_DIR}/raw/kinesis-stream-details.ndjson" || true
@@ -110,7 +110,7 @@ firehose_stream_names="$(jq -r '.DeliveryStreamNames[]? // empty' \
 : > "${OUT_DIR}/raw/firehose-delivery-stream-details.ndjson"
 while IFS= read -r stream; do
   [[ -z "$stream" ]] && continue
-  aws "${AWS_ARGS[@]}" firehose describe-delivery-stream \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" firehose describe-delivery-stream \
     --delivery-stream-name "$stream" 2>/dev/null | \
     jq -c --arg s "$stream" '{stream_name:$s, data:.}' \
     >> "${OUT_DIR}/raw/firehose-delivery-stream-details.ndjson" || true

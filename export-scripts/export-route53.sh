@@ -14,10 +14,10 @@ if [[ "$SKIP_GLOBALS" != "true" ]]; then
   : > "${OUT_DIR}/raw/route53-hosted-zone-details.ndjson"
   while IFS= read -r hz; do
     [[ -z "$hz" ]] && continue
-    aws "${AWS_ARGS[@]}" route53 list-resource-record-sets --hosted-zone-id "$hz" 2>/dev/null | \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" route53 list-resource-record-sets --hosted-zone-id "$hz" 2>/dev/null | \
       jq -c --arg hz "$hz" '{hosted_zone_id:$hz, data:.}' \
       >> "${OUT_DIR}/raw/route53-record-sets.ndjson" || true
-    aws "${AWS_ARGS[@]}" route53 get-hosted-zone --id "$hz" 2>/dev/null | \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" route53 get-hosted-zone --id "$hz" 2>/dev/null | \
       jq -c --arg hz "$hz" '{hosted_zone_id:$hz, data:.}' \
       >> "${OUT_DIR}/raw/route53-hosted-zone-details.ndjson" || true
   done <<< "$hz_ids"
@@ -30,7 +30,7 @@ if [[ "$SKIP_GLOBALS" != "true" ]]; then
     [[ -z "$tp_info" ]] && continue
     tp_id="$(echo "$tp_info" | cut -d'|' -f1)"
     tp_ver="$(echo "$tp_info" | cut -d'|' -f2)"
-    aws "${AWS_ARGS[@]}" route53 get-traffic-policy \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" route53 get-traffic-policy \
       --id "$tp_id" --version "$tp_ver" 2>/dev/null | \
       jq -c --arg id "$tp_id" '{traffic_policy_id:$id, data:.}' \
       >> "${OUT_DIR}/raw/route53-traffic-policy-versions.ndjson" || true
@@ -46,11 +46,11 @@ resolver_ep_ids="$(jq -r '.ResolverEndpoints[]?.Id // empty' \
 : > "${OUT_DIR}/raw/r53resolver-endpoint-ip-addresses.ndjson"
 while IFS= read -r ep_id; do
   [[ -z "$ep_id" ]] && continue
-  aws "${AWS_ARGS[@]}" route53resolver get-resolver-endpoint \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" route53resolver get-resolver-endpoint \
     --resolver-endpoint-id "$ep_id" 2>/dev/null | \
     jq -c --arg id "$ep_id" '{endpoint_id:$id, data:.}' \
     >> "${OUT_DIR}/raw/r53resolver-endpoint-details.ndjson" || true
-  aws "${AWS_ARGS[@]}" route53resolver list-resolver-endpoint-ip-addresses \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" route53resolver list-resolver-endpoint-ip-addresses \
     --resolver-endpoint-id "$ep_id" 2>/dev/null | \
     jq -c --arg id "$ep_id" '{endpoint_id:$id, data:.}' \
     >> "${OUT_DIR}/raw/r53resolver-endpoint-ip-addresses.ndjson" || true
@@ -62,7 +62,7 @@ resolver_rule_ids="$(jq -r '.ResolverRules[]?.Id // empty' \
 : > "${OUT_DIR}/raw/r53resolver-rule-details.ndjson"
 while IFS= read -r rule_id; do
   [[ -z "$rule_id" ]] && continue
-  aws "${AWS_ARGS[@]}" route53resolver get-resolver-rule \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" route53resolver get-resolver-rule \
     --resolver-rule-id "$rule_id" 2>/dev/null | \
     jq -c --arg id "$rule_id" '{rule_id:$id, data:.}' \
     >> "${OUT_DIR}/raw/r53resolver-rule-details.ndjson" || true

@@ -21,14 +21,14 @@ if [[ -n "$lb_arns" ]]; then
     "${OUT_DIR}/raw/elbv2-target-groups.json")"
   while IFS= read -r tg; do
     [[ -z "$tg" ]] && continue
-    aws "${AWS_ARGS[@]}" elbv2 describe-target-health --target-group-arn "$tg" 2>/dev/null | \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" elbv2 describe-target-health --target-group-arn "$tg" 2>/dev/null | \
       jq -c --arg tg "$tg" '{target_group_arn:$tg, data:.}' \
       >> "${OUT_DIR}/raw/elbv2-target-health.ndjson" || true
   done <<< "$tg_arns"
 
   while IFS= read -r lb; do
     [[ -z "$lb" ]] && continue
-    aws "${AWS_ARGS[@]}" elbv2 describe-load-balancer-attributes \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" elbv2 describe-load-balancer-attributes \
       --load-balancer-arn "$lb" 2>/dev/null | \
       jq -c --arg lb "$lb" '{load_balancer_arn:$lb, data:.}' \
       >> "${OUT_DIR}/raw/elbv2-load-balancer-attributes.ndjson" || true
@@ -39,10 +39,10 @@ if [[ -n "$lb_arns" ]]; then
     listener_arns="$(jq -r '.Listeners[]?.ListenerArn // empty' "$listeners_file")"
     while IFS= read -r listener; do
       [[ -z "$listener" ]] && continue
-      aws "${AWS_ARGS[@]}" elbv2 describe-rules --listener-arn "$listener" 2>/dev/null | \
+      ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" elbv2 describe-rules --listener-arn "$listener" 2>/dev/null | \
         jq -c --arg l "$listener" '{listener_arn:$l, data:.}' \
         >> "${OUT_DIR}/raw/elbv2-rules.ndjson" || true
-      aws "${AWS_ARGS[@]}" elbv2 describe-listener-certificates \
+      ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" elbv2 describe-listener-certificates \
         --listener-arn "$listener" 2>/dev/null | \
         jq -c --arg l "$listener" '{listener_arn:$l, data:.}' \
         >> "${OUT_DIR}/raw/elbv2-listener-certificates.ndjson" || true
@@ -57,7 +57,7 @@ cert_arns="$(jq -r '.CertificateSummaryList[]?.CertificateArn // empty' \
 : > "${OUT_DIR}/raw/acm-certificate-details.ndjson"
 while IFS= read -r cert; do
   [[ -z "$cert" ]] && continue
-  aws "${AWS_ARGS[@]}" acm describe-certificate --certificate-arn "$cert" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" acm describe-certificate --certificate-arn "$cert" 2>/dev/null | \
     jq -c --arg arn "$cert" '{certificate_arn:$arn, data:.}' \
     >> "${OUT_DIR}/raw/acm-certificate-details.ndjson" || true
 done <<< "$cert_arns"
@@ -71,11 +71,11 @@ while IFS= read -r acl_json; do
   acl_name="$(echo "$acl_json" | jq -r '.Name')"
   acl_id="$(echo "$acl_json" | jq -r '.Id')"
   acl_arn="$(echo "$acl_json" | jq -r '.ARN')"
-  aws "${AWS_ARGS[@]}" wafv2 get-web-acl --scope REGIONAL \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" wafv2 get-web-acl --scope REGIONAL \
     --name "$acl_name" --id "$acl_id" 2>/dev/null | \
     jq -c --arg arn "$acl_arn" '{web_acl_arn:$arn, data:.}' \
     >> "${OUT_DIR}/raw/wafv2-webacl-details-regional.ndjson" || true
-  aws "${AWS_ARGS[@]}" wafv2 list-resources-for-web-acl \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" wafv2 list-resources-for-web-acl \
     --web-acl-arn "$acl_arn" 2>/dev/null | \
     jq -c --arg arn "$acl_arn" '{web_acl_arn:$arn, data:.}' \
     >> "${OUT_DIR}/raw/wafv2-webacl-resources-regional.ndjson" || true

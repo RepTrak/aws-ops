@@ -13,15 +13,15 @@ sm_secret_ids="$(jq -r '.SecretList[]?.ARN // empty' \
 : > "${OUT_DIR}/raw/secretsmanager-secret-policies.ndjson"
 while IFS= read -r secret_id; do
   [[ -z "$secret_id" ]] && continue
-  aws "${AWS_ARGS[@]}" secretsmanager describe-secret \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" secretsmanager describe-secret \
     --secret-id "$secret_id" 2>/dev/null | \
     jq -c --arg id "$secret_id" '{secret_id:$id, data:.}' \
     >> "${OUT_DIR}/raw/secretsmanager-secret-details.ndjson" || true
-  aws "${AWS_ARGS[@]}" secretsmanager list-secret-version-ids \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" secretsmanager list-secret-version-ids \
     --secret-id "$secret_id" 2>/dev/null | \
     jq -c --arg id "$secret_id" '{secret_id:$id, data:.}' \
     >> "${OUT_DIR}/raw/secretsmanager-secret-versions.ndjson" || true
-  if sm_policy_out="$(aws "${AWS_ARGS[@]}" secretsmanager get-resource-policy \
+  if sm_policy_out="$(${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" secretsmanager get-resource-policy \
       --secret-id "$secret_id" 2>/dev/null)"; then
     echo "$sm_policy_out" | jq -c --arg id "$secret_id" '{secret_id:$id, data:.}' \
       >> "${OUT_DIR}/raw/secretsmanager-secret-policies.ndjson"
@@ -35,7 +35,7 @@ if [[ "$WITH_SECRET_VALUES" == "true" ]]; then
   : > "${OUT_DIR}/raw/secretsmanager-secret-values.ndjson"
   while IFS= read -r secret_id; do
     [[ -z "$secret_id" ]] && continue
-    aws "${AWS_ARGS[@]}" secretsmanager get-secret-value \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" secretsmanager get-secret-value \
       --secret-id "$secret_id" 2>/dev/null | jq -c '.' \
       >> "${OUT_DIR}/raw/secretsmanager-secret-values.ndjson" || true
   done <<< "$sm_secret_ids"
@@ -45,7 +45,7 @@ if [[ "$WITH_SECRET_VALUES" == "true" ]]; then
   : > "${OUT_DIR}/raw/ssm-parameter-values.ndjson"
   while IFS= read -r name; do
     [[ -z "$name" ]] && continue
-    aws "${AWS_ARGS[@]}" ssm get-parameter --name "$name" \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" ssm get-parameter --name "$name" \
       --with-decryption 2>/dev/null | jq -c '.' \
       >> "${OUT_DIR}/raw/ssm-parameter-values.ndjson" || true
   done <<< "$param_names"

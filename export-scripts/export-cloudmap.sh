@@ -15,7 +15,7 @@ namespace_ids="$(jq -r '.Namespaces[]?.Id // empty' \
 
 while IFS= read -r ns; do
   [[ -z "$ns" ]] && continue
-  aws "${AWS_ARGS[@]}" servicediscovery get-namespace --id "$ns" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" servicediscovery get-namespace --id "$ns" 2>/dev/null | \
     jq -c --arg ns "$ns" '{namespace_id:$ns, data:.}' \
     >> "${OUT_DIR}/raw/servicediscovery-namespaces.ndjson" || true
 done <<< "$namespace_ids"
@@ -27,7 +27,7 @@ service_ids="$(jq -r '.Services[]?.Id // empty' \
 
 while IFS= read -r svc; do
   [[ -z "$svc" ]] && continue
-  aws "${AWS_ARGS[@]}" servicediscovery get-service --id "$svc" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" servicediscovery get-service --id "$svc" 2>/dev/null | \
     jq -c --arg svc "$svc" '{service_id:$svc, data:.}' \
     >> "${OUT_DIR}/raw/servicediscovery-services.ndjson" || true
   safe_aws_json "${OUT_DIR}/raw/servicediscovery-list-instances-${svc}.json" \

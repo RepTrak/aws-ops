@@ -14,7 +14,7 @@ jq -r '.projects[]? // empty' "${OUT_DIR}/raw/codebuild-projects.json" \
 if [[ -s "$cb_names_file" ]]; then
   while IFS= read -r batch; do
     [[ -z "$batch" ]] && continue
-    aws "${AWS_ARGS[@]}" codebuild batch-get-projects --names $batch 2>/dev/null | \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" codebuild batch-get-projects --names $batch 2>/dev/null | \
       jq -c '.projects[]?' >> "${OUT_DIR}/raw/codebuild-project-details.ndjson" || true
   done < <(chunk_lines_file 100 "$cb_names_file")
 fi
@@ -26,7 +26,7 @@ pipeline_names="$(jq -r '.pipelines[]?.name // empty' \
 : > "${OUT_DIR}/raw/codepipeline-pipeline-details.ndjson"
 while IFS= read -r name; do
   [[ -z "$name" ]] && continue
-  aws "${AWS_ARGS[@]}" codepipeline get-pipeline --name "$name" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" codepipeline get-pipeline --name "$name" 2>/dev/null | \
     jq -c --arg name "$name" '{pipeline_name:$name, data:.}' \
     >> "${OUT_DIR}/raw/codepipeline-pipeline-details.ndjson" || true
 done <<< "$pipeline_names"
@@ -38,12 +38,12 @@ cd_app_names="$(jq -r '.applications[]? // empty' \
 : > "${OUT_DIR}/raw/codedeploy-deployment-groups.ndjson"
 while IFS= read -r app; do
   [[ -z "$app" ]] && continue
-  dg_names="$(aws "${AWS_ARGS[@]}" deploy list-deployment-groups \
+  dg_names="$(${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" deploy list-deployment-groups \
     --application-name "$app" 2>/dev/null \
     | jq -r '.deploymentGroups[]? // empty' || true)"
   while IFS= read -r dg; do
     [[ -z "$dg" ]] && continue
-    aws "${AWS_ARGS[@]}" deploy get-deployment-group \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" deploy get-deployment-group \
       --application-name "$app" --deployment-group-name "$dg" 2>/dev/null | \
       jq -c --arg app "$app" --arg dg "$dg" \
         '{application_name:$app, deployment_group_name:$dg, data:.}' \
@@ -63,7 +63,7 @@ if [[ "$SKIP_GLOBALS" != "true" ]]; then
   : > "${OUT_DIR}/raw/iam-oidc-provider-details.ndjson"
   while IFS= read -r arn; do
     [[ -z "$arn" ]] && continue
-    aws "${AWS_ARGS[@]}" iam get-open-id-connect-provider \
+    ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" iam get-open-id-connect-provider \
       --open-id-connect-provider-arn "$arn" 2>/dev/null | \
       jq -c --arg arn "$arn" '{provider_arn:$arn, data:.}' \
       >> "${OUT_DIR}/raw/iam-oidc-provider-details.ndjson" || true

@@ -19,7 +19,7 @@ ec_pg_names="$(jq -r '.CacheParameterGroups[]?.CacheParameterGroupName // empty'
 : > "${OUT_DIR}/raw/elasticache-parameter-group-contents.ndjson"
 while IFS= read -r pg; do
   [[ -z "$pg" ]] && continue
-  aws "${AWS_ARGS[@]}" elasticache describe-cache-parameters \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" elasticache describe-cache-parameters \
     --cache-parameter-group-name "$pg" 2>/dev/null | \
     jq -c --arg pg "$pg" '{parameter_group_name:$pg, data:.}' \
     >> "${OUT_DIR}/raw/elasticache-parameter-group-contents.ndjson" || true
@@ -36,7 +36,7 @@ os_domain_names="$(jq -r '.DomainNames[]?.DomainName // empty' \
 : > "${OUT_DIR}/raw/opensearch-domain-details.ndjson"
 while IFS= read -r domain; do
   [[ -z "$domain" ]] && continue
-  aws "${AWS_ARGS[@]}" opensearch describe-domain --domain-name "$domain" 2>/dev/null | \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" opensearch describe-domain --domain-name "$domain" 2>/dev/null | \
     jq -c --arg d "$domain" '{domain_name:$d, data:.}' \
     >> "${OUT_DIR}/raw/opensearch-domain-details.ndjson" || true
 done <<< "$os_domain_names"

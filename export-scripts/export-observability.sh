@@ -19,7 +19,7 @@ dashboard_names="$(jq -r '.DashboardEntries[]?.DashboardName // empty' \
 : > "${OUT_DIR}/raw/cloudwatch-dashboard-bodies.ndjson"
 while IFS= read -r dashboard; do
   [[ -z "$dashboard" ]] && continue
-  aws "${AWS_ARGS[@]}" cloudwatch get-dashboard \
+  ${_TIMEOUT_CMD} aws "${AWS_ARGS[@]}" cloudwatch get-dashboard \
     --dashboard-name "$dashboard" 2>/dev/null | \
     jq -c --arg name "$dashboard" '{dashboard_name:$name, data:.}' \
     >> "${OUT_DIR}/raw/cloudwatch-dashboard-bodies.ndjson" || true
