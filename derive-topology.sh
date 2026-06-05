@@ -1063,6 +1063,90 @@ for _vl in ((load_json('apigwv2-vpc-links.json', {}) or {}).get('Items') or []):
 (derived / 'sg_members.json').write_text(json.dumps(sg_members, indent=2) + '\n')
 summary['derived_sg_member_entries'] = sum(len(v) for v in sg_members.values())
 
+# --- derived/kms_usage.json ---
+# Maps each customer-managed KMS key to the AWS resources encrypted with it.
+# Sources: RDS instances/clusters (incl. DocDB), EFS, DynamoDB tables, S3 buckets,
+# Secrets Manager secrets, ElastiCache replication groups, Redshift clusters.
+def _kms_key_id(arn_or_id):
+    """Normalise a KMS key ARN or alias ARN to a plain key ID."""
+    if not arn_or_id:
+        return ''
+    # arn:aws:kms:region:account:key/KEY-ID  or  arn:aws:kms:...:alias/name
+    if '/key/' in arn_or_id:
+        return arn_or_id.split('/key/')[-1]
+    if 'arn:aws:kms' in arn_or_id and ':key/' not in arn_or_id and '/key/' not in arn_or_id:
+        return arn_or_id.split('/')[-1]
+    # plain key ID or MRK ID
+    return arn_or_id.split('/')[-1] if '/' in arn_or_id else arn_or_id
+
+_aliases = json.load(open(raw / 'kms-aliases.json')) if (raw / 'kms-aliases.json').exists() else {}
+_alias_map = {}  # key_id → alias name
+for _a in (_aliases.get('Aliases') or []):
+    _kid = _a.get('TargetKeyId','')
+    _aname = _a.get('AliasName','')
+    if _kid and _aname and not _aname.startswith('alias/aws/'):
+        _alias_map[_kid] = _aname.replace('alias/', '')
+
+kms_usage = {}
+
+def _add_kms(key_arn_or_id, resource_type, resource_id):
+    _kid = _kms_key_id(key_arn_or_id)
+    if not _kid:
+        return
+    if _kid not in kms_usage:
+        kms_usage[_kid] = {'alias': _alias_map.get(_kid, _kid), 'resources': []}
+    kms_usage[_kid]['resources'].append({'resource_type': resource_type, 'resource_id': resource_id})
+
+# RDS instances
+for _i in ((load_json('rds-db-instances.json', {}) or {}).get('DBInstances') or []):
+    if _i.get('StorageEncrypted') and _i.get('KmsKeyId'):
+        _add_kms(_i['KmsKeyId'], 'rds_instance', _i.get('DBInstanceIdentifier',''))
+
+# RDS clusters (Aurora) and DocumentDB
+for _c in ((load_json('rds-db-clusters.json', {}) or {}).get('DBClusters') or []):
+    if _c.get('StorageEncrypted') and _c.get('KmsKeyId'):
+        _rtype = 'docdb_cluster' if _c.get('Engine') == 'docdb' else 'rds_cluster'
+        _add_kms(_c['KmsKeyId'], _rtype, _c.get('DBClusterIdentifier',''))
+
+# EFS file systems
+for _fs in ((load_json('efs-file-systems.json', {}) or {}).get('FileSystems') or []):
+    if _fs.get('Encrypted') and _fs.get('KmsKeyId'):
+        _add_kms(_fs['KmsKeyId'], 'efs', _fs.get('FileSystemId',''))
+
+# DynamoDB tables (via table details)
+for _rec in load_ndjson('dynamodb-table-details.ndjson'):
+    _tbl = (_rec.get('data') or {}).get('Table') or {}
+    _sse = _tbl.get('SSEDescription') or {}
+    if _sse.get('Status') == 'ENABLED' and _sse.get('KMSMasterKeyArn'):
+        _add_kms(_sse['KMSMasterKeyArn'], 'dynamodb_table', _tbl.get('TableName',''))
+
+# Secrets Manager
+for _rec in load_ndjson('secretsmanager-secret-details.ndjson'):
+    _s = (_rec.get('data') or {})
+    if _s.get('KmsKeyId') and not str(_s.get('KmsKeyId','')).startswith('alias/aws/'):
+        _add_kms(_s['KmsKeyId'], 'secret', _s.get('ARN','') or _rec.get('secret_id',''))
+
+# S3 buckets (via bucket details)
+for _rec in load_ndjson('s3-bucket-details.ndjson'):
+    _enc = (_rec.get('encryption') or {}).get('ServerSideEncryptionConfiguration') or {}
+    for _rule in (_enc.get('Rules') or []):
+        _kmk = (_rule.get('ApplyServerSideEncryptionByDefault') or {}).get('KMSMasterKeyID','')
+        if _kmk and not _kmk.startswith('alias/aws/'):
+            _add_kms(_kmk, 's3_bucket', _rec.get('bucket_name',''))
+
+# ElastiCache replication groups (KMS key not directly in list API; skip if not available)
+for _rg in ((load_json('elasticache-replication-groups.json', {}) or {}).get('ReplicationGroups') or []):
+    if _rg.get('AtRestEncryptionEnabled') and _rg.get('KmsKeyId'):
+        _add_kms(_rg['KmsKeyId'], 'elasticache', _rg.get('ReplicationGroupId',''))
+
+# Redshift clusters
+for _cl in ((load_json('redshift-clusters.json', {}) or {}).get('Clusters') or []):
+    if _cl.get('Encrypted') and _cl.get('KmsKeyId'):
+        _add_kms(_cl['KmsKeyId'], 'redshift_cluster', _cl.get('ClusterIdentifier',''))
+
+(derived / 'kms_usage.json').write_text(json.dumps(kms_usage, indent=2) + '\n')
+summary['derived_kms_encrypted_resources'] = sum(len(v['resources']) for v in kms_usage.values())
+
 (derived / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
 (derived / 'README.md').write_text(
     '\n'.join([

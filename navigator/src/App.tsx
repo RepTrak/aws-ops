@@ -137,34 +137,42 @@ function Navigator() {
 
     // Apply visibility to nodes — compute non-overlapping positions for newly revealed siblings
     setNodes(prev => {
-      const needsUpdate = prev.some(n => n.hidden === visibleIds.has(n.id))
-      if (!needsUpdate) return prev
-
       const anchor = prev.find(n => n.id === nodeId)
 
-      // Pre-compute smart positions for all nodes being newly revealed by THIS expansion
+      // Compute positions for nodes directly connected to this expansion.
+      // This covers both hidden nodes (being newly revealed) and already-visible
+      // nodes that should be repositioned near the anchor (shared subnet/cert scenario).
       let siblingPositions: Map<string, { x: number; y: number }> | null = null
       if (isExpanding && anchor) {
-        const siblings = prev.filter(p =>
-          p.hidden && visibleIds.has(p.id) && currentEdges.some(e =>
+        const expansionTargets = prev.filter(p =>
+          visibleIds.has(p.id) && currentEdges.some(e =>
             (e.data as RelationshipEdge['data'])?.relationship === edgeType &&
             (direction === 'out'
               ? e.source === nodeId && e.target === p.id
               : e.target === nodeId && e.source === p.id)))
 
-        if (siblings.length > 0) {
-          const existingPositions = prev.filter(n => !n.hidden).map(n => n.position)
+        if (expansionTargets.length > 0) {
+          const existingPositions = prev
+            .filter(n => !n.hidden && !expansionTargets.some(t => t.id === n.id))
+            .map(n => n.position)
           const positions = positionSiblings(
-            siblings.length, anchor.position, direction, existingPositions)
-          siblingPositions = new Map(siblings.map((s, i) => [s.id, positions[i]]))
-          newlyRevealedIds = siblings.map(s => s.id)
+            expansionTargets.length, anchor.position, direction, existingPositions)
+          siblingPositions = new Map(expansionTargets.map((s, i) => [s.id, positions[i]]))
+          newlyRevealedIds = expansionTargets.map(s => s.id)
         }
       }
 
+      const needsUpdate = prev.some(n => {
+        const shouldBeVisible = visibleIds.has(n.id)
+        if (n.hidden !== !shouldBeVisible) return true          // visibility change
+        if (!n.hidden && siblingPositions?.has(n.id)) return true  // position change
+        return false
+      })
+      if (!needsUpdate) return prev
+
       return prev.map(n => {
         const shouldBeVisible = visibleIds.has(n.id)
-        if (!n.hidden && shouldBeVisible) return n   // already visible ✓
-        if (n.hidden && !shouldBeVisible) return n   // already hidden ✓
+        if (n.hidden && !shouldBeVisible) return n   // stay hidden ✓
 
         if (shouldBeVisible) {
           const pos = siblingPositions?.get(n.id) ?? n.position

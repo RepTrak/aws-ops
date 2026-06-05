@@ -180,7 +180,7 @@ export interface SqsDlq {
 export interface LbRaw { LoadBalancerArn: string; LoadBalancerName: string; Scheme: string; DNSName: string; Type: string; VpcId?: string }
 export interface RdsInstanceRaw { DBInstanceIdentifier: string; DBInstanceClass: string; Engine: string; DBInstanceStatus: string; Endpoint?: { Address: string; Port: number }; VpcSecurityGroups: { VpcSecurityGroupId: string }[] }
 export interface RdsClusterRaw { DBClusterIdentifier: string; Engine: string; Status: string; VpcSecurityGroups: { VpcSecurityGroupId: string }[] }
-export interface RedshiftClusterRaw { ClusterIdentifier: string; NodeType: string; ClusterStatus: string; NumberOfNodes: number; VpcSecurityGroups: { VpcSecurityGroupId: string }[] }
+export interface RedshiftClusterRaw { ClusterIdentifier: string; NodeType: string; ClusterStatus: string; NumberOfNodes: number; VpcSecurityGroups: { VpcSecurityGroupId: string }[]; IamRoles?: { IamRoleArn: string; ApplyStatus: string }[]; Encrypted?: boolean; KmsKeyId?: string }
 export interface RedshiftWgRaw { workgroupName: string; status: string; baseCapacity: number }
 export interface ElasticacheRaw { ReplicationGroupId: string; Description: string; Status: string; SecurityGroups?: { SecurityGroupId: string }[] }
 export interface LambdaRaw { FunctionName: string; FunctionArn: string; Runtime: string; Handler: string; Role: string; VpcConfig?: { VpcId: string; SubnetIds: string[]; SecurityGroupIds: string[] } }

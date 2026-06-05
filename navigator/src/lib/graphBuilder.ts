@@ -882,6 +882,18 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
     if (svcNode && roleNode) edge(svcNode.id, roleNode.id, 'iam', 'assumes task role', false)
   }
 
+  // ── IAM: Redshift cluster → attached IAM roles (for S3 COPY/UNLOAD) ────────
+  for (const cl of snap.redshiftClusters ?? []) {
+    const clNode = findNode(cl.ClusterIdentifier, nodes)
+    if (!clNode) continue
+    for (const r of (cl.IamRoles ?? [])) {
+      if (r.ApplyStatus !== 'in-sync') continue
+      const roleName = r.IamRoleArn.split('/').pop() ?? ''
+      const roleNode = findNode(`role-${roleName}`, nodes)
+      if (roleNode) edge(clNode.id, roleNode.id, 'iam', 'attached IAM role', false)
+    }
+  }
+
   // ── IAM: IAM role → S3 bucket (from service_access) ──────────────────────
   for (const [roleName, access] of Object.entries(snap.iamRoleResourceAccess ?? {})) {
     const roleNode = findNode(`role-${roleName}`, nodes)
@@ -947,12 +959,15 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
     if (!kmsNode) continue
     for (const res of (usage.resources ?? [])) {
       let resourceNode: ResourceNode | undefined
-      if (res.resource_type === 'rds_instance')   resourceNode = findNode(res.resource_id, nodes)
-      if (res.resource_type === 'rds_cluster')    resourceNode = findNode(res.resource_id, nodes)
-      if (res.resource_type === 's3_bucket')       resourceNode = findNode(res.resource_id, nodes)
-      if (res.resource_type === 'elasticache')     resourceNode = findNode(res.resource_id, nodes)
-      if (res.resource_type === 'secret')          resourceNode = findNode(res.resource_id, nodes)
-      if (res.resource_type === 'efs')             resourceNode = findNode(res.resource_id, nodes)
+      if (res.resource_type === 'rds_instance')     resourceNode = findNode(res.resource_id, nodes)
+      if (res.resource_type === 'rds_cluster')      resourceNode = findNode(res.resource_id, nodes)
+      if (res.resource_type === 'docdb_cluster')    resourceNode = findNode(res.resource_id, nodes)
+      if (res.resource_type === 's3_bucket')         resourceNode = findNode(res.resource_id, nodes)
+      if (res.resource_type === 'elasticache')       resourceNode = findNode(res.resource_id, nodes)
+      if (res.resource_type === 'secret')            resourceNode = findNode(res.resource_id, nodes)
+      if (res.resource_type === 'efs')               resourceNode = findNode(res.resource_id, nodes)
+      if (res.resource_type === 'dynamodb_table')    resourceNode = findNode(res.resource_id, nodes)
+      if (res.resource_type === 'redshift_cluster')  resourceNode = findNode(res.resource_id, nodes)
       if (!resourceNode) continue
       edge(resourceNode.id, kmsNode.id, 'encryption', `encrypted with ${usage.alias}`, false)
     }
