@@ -93,13 +93,13 @@ export default function Toolbar({
       const label      = String(d.label)
       const rtype      = String(d.resourceType).replace(/_/g, ' ')
       const matchedMeta = (d.metadata as { key: string; value: string }[])
-        .find(m => m.value.toLowerCase().includes(t))
+        .find(m => m.value != null && String(m.value).toLowerCase().includes(t))
       if (!label.toLowerCase().includes(t) && !rtype.includes(t) && !matchedMeta) return acc
       acc.push({
         nodeId: n.id, label, resourceType: rtype,
         category: String(d.category), isHidden: n.hidden ?? false,
         matchedField: matchedMeta && !label.toLowerCase().includes(t)
-          ? `${matchedMeta.key}: ${matchedMeta.value}` : rtype,
+          ? `${matchedMeta.key}: ${matchedMeta.value ?? ''}` : rtype,
       })
       return acc
     }, []).slice(0, 12)

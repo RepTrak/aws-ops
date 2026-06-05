@@ -53,6 +53,26 @@ export interface SnapshotData {
   kmsUsage: Record<string, KmsUsageEntry>
   logGroups: LogGroupRaw[]
   cloudMapNamespaces: CloudMapNamespaceRaw[]
+  lambdaEsms: LambdaEsmRaw[]
+  ecrRepos: EcrRepoRaw[]
+  acmCertDetails: AcmCertDetailRecord[]
+  elbListeners: ElbListenerRecord[]
+  eventbridgeRules: EventbridgeRuleRecord[]
+  eventbridgeTargets: EventbridgeTargetRecord[]
+  codebuildProjects: string[]
+  efsFileSystems: EfsRaw[]
+  natGatewayEips: Record<string, NatGatewayEip>
+  vpcEndpointRoutes: Record<string, VpcEndpointRoute>
+  cloudfrontDistributions: CloudFrontDistributionRaw[]
+  route53RecordSets: Route53RecordSetRecord[]
+  vpcs: VpcRaw[]
+  mskClusters: MskClusterRaw[]
+  memorydbClusters: MemoryDbRaw[]
+  wafv2RegionalDetails: Wafv2DetailRecord[]
+  wafv2RegionalResources: Wafv2ResourceRecord[]
+  wafv2CfDetails: Wafv2DetailRecord[]
+  guarddutyDetails: GuardDutyDetailRecord[]
+  eksClusterDetails: EksClusterDetailRecord[]
 }
 
 // — derived types —
@@ -157,7 +177,7 @@ export interface SqsDlq {
 
 // — raw types (minimally typed, just what we display) —
 
-export interface LbRaw { LoadBalancerArn: string; LoadBalancerName: string; Scheme: string; DNSName: string; Type: string }
+export interface LbRaw { LoadBalancerArn: string; LoadBalancerName: string; Scheme: string; DNSName: string; Type: string; VpcId?: string }
 export interface RdsInstanceRaw { DBInstanceIdentifier: string; DBInstanceClass: string; Engine: string; DBInstanceStatus: string; Endpoint?: { Address: string; Port: number }; VpcSecurityGroups: { VpcSecurityGroupId: string }[] }
 export interface RdsClusterRaw { DBClusterIdentifier: string; Engine: string; Status: string; VpcSecurityGroups: { VpcSecurityGroupId: string }[] }
 export interface RedshiftClusterRaw { ClusterIdentifier: string; NodeType: string; ClusterStatus: string; NumberOfNodes: number; VpcSecurityGroups: { VpcSecurityGroupId: string }[] }
@@ -187,4 +207,146 @@ export interface CloudMapNamespaceRaw { Id: string; Name: string; Type: string; 
 export interface KmsUsageEntry {
   alias: string
   resources: { resource_type: string; resource_id: string }[]
+}
+export interface LambdaEsmRaw {
+  EventSourceArn: string
+  FunctionArn: string
+  State: string
+  BatchSize?: number
+}
+export interface EcrRepoRaw {
+  repositoryName: string
+  repositoryArn: string
+  repositoryUri: string
+}
+export interface AcmCertDetailRecord {
+  certificate_arn: string   // actual field name in the ndjson
+  data?: {
+    Certificate?: {
+      CertificateArn: string
+      DomainName: string
+      SubjectAlternativeNames?: string[]
+      Status?: string
+      InUseBy?: string[]
+    }
+  }
+}
+export interface ElbListenerRecord {
+  load_balancer_arn: string
+  data?: {
+    Listeners?: Array<{
+      Port: number
+      Protocol: string
+      Certificates?: Array<{ CertificateArn: string }>
+    }>
+  }
+}
+export interface EventbridgeRuleRecord {
+  bus: string
+  data?: {
+    Rules?: Array<{ Name: string; Arn: string; State: string; ScheduleExpression?: string }>
+  }
+}
+export interface EventbridgeTargetRecord {
+  rule: string
+  bus: string
+  data?: { Targets?: Array<{ Id: string; Arn: string }> }
+}
+export interface EfsRaw {
+  FileSystemId: string
+  FileSystemArn: string
+  Name?: string
+  LifeCycleState: string
+  Encrypted?: boolean
+  KmsKeyId?: string
+}
+export interface NatGatewayEip {
+  subnet_id: string
+  vpc_id: string
+  state: string
+  connectivity_type: string
+  eips: Array<{ allocation_id: string; public_ip: string; private_ip: string }>
+}
+export interface Wafv2DetailRecord {
+  data?: { WebACL?: { Name: string; ARN: string; Description?: string } }
+}
+export interface Wafv2ResourceRecord {
+  web_acl_arn: string
+  data?: { ResourceArns?: string[] }
+}
+export interface EksClusterDetailRecord {
+  cluster_name: string
+  data?: {
+    cluster?: {
+      name: string
+      arn: string
+      status: string
+      version: string
+      endpoint?: string
+      roleArn?: string
+      resourcesVpcConfig?: {
+        vpcId: string
+        subnetIds: string[]
+        securityGroupIds: string[]
+        clusterSecurityGroupId?: string
+      }
+      tags?: Record<string, string>
+    }
+  }
+}
+export interface GuardDutyDetailRecord {
+  detector_id: string
+  data?: {
+    Status?: string
+    FindingPublishingFrequency?: string
+    DataSources?: Record<string, unknown>
+  }
+}
+export interface VpcRaw {
+  VpcId: string
+  CidrBlock: string
+  State: string
+  Tags?: Array<{ Key: string; Value: string }>
+}
+export interface MskClusterRaw {
+  ClusterArn: string
+  ClusterName: string
+  State: string
+  ClusterType?: string
+}
+export interface MemoryDbRaw {
+  Name: string
+  Status: string
+  NodeType: string
+  EngineVersion?: string
+}
+export interface CloudFrontDistributionRaw {
+  Id: string
+  ARN: string
+  Status: string
+  DomainName: string
+  Aliases?: { Items?: string[] }
+  Origins?: { Items?: Array<{ Id: string; DomainName: string }> }
+  ViewerCertificate?: { ACMCertificateArn?: string }
+}
+export interface Route53RecordSetRecord {
+  hosted_zone_id: string
+  data?: {
+    ResourceRecordSets?: Array<{
+      Name: string
+      Type: string
+      AliasTarget?: { DNSName: string }
+      ResourceRecords?: Array<{ Value: string }>
+    }>
+  }
+}
+export interface VpcEndpointRoute {
+  service: string
+  vpc_id: string
+  type: string
+  state: string
+  route_table_ids: string[]
+  subnets_routed_through: string[]
+  subnet_ids: string[]
+  dns_entries: string[]
 }

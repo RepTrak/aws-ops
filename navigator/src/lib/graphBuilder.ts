@@ -7,6 +7,28 @@ import type {
 import { RESOURCE_CATEGORY, RESOURCE_ICON, EDGE_COLORS } from '@/lib/colors'
 import { generateAIBrief } from '@/lib/aibrief'
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Secrets Manager valueFrom ARNs can have a trailing :JSON_KEY:: suffix beyond
+// the standard 7-segment ARN. Strip it so the ref matches the plain secret ARN.
+function baseSecretArn(ref: string): string {
+  const parts = ref.split(':')
+  return parts.length > 7 ? parts.slice(0, 7).join(':') : ref
+}
+
+// Extract S3 bucket name from a CloudFront origin domain name.
+// Handles: bucket.s3.amazonaws.com, bucket.s3.region.amazonaws.com,
+//          bucket.s3-website-region.amazonaws.com
+function s3BucketFromOriginDomain(domain: string): string {
+  const m = domain.match(/^([^.]+)\.s3[\-.]/)
+  return m ? m[1] : ''
+}
+
+// Normalise an ALB DNS name for matching: strip dualstack. prefix and trailing dot.
+function normaliseAlbDns(dns: string): string {
+  return dns.replace(/^dualstack\./i, '').replace(/\.$/, '').toLowerCase()
+}
+
 // ─── ID registry ──────────────────────────────────────────────────────────────
 
 let _nodeSeq = 0
@@ -164,9 +186,11 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
     rds.DBInstanceStatus === 'available' ? 'running' : 'warning', true))
   }
 
-  // ── RDS clusters ──────────────────────────────────────────────────────────
+  // ── RDS clusters (Aurora) + DocumentDB clusters ───────────────────────────
   for (const cl of snap.rdsClusters ?? []) {
-    add(mkNode(cl.DBClusterIdentifier, 'rds_cluster', cl.DBClusterIdentifier, cl.Engine, [
+    const isDocDb = cl.Engine === 'docdb'
+    const rtype = isDocDb ? 'docdb_cluster' : 'rds_cluster'
+    add(mkNode(cl.DBClusterIdentifier, rtype, cl.DBClusterIdentifier, cl.Engine, [
       { key: 'Identifier', value: cl.DBClusterIdentifier },
       { key: 'Engine', value: cl.Engine },
       { key: 'Status', value: cl.Status },
@@ -266,16 +290,22 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
   }
 
   // ── IAM roles (hidden — shown via iam/logging/encryption filters) ─────────
-  const rolesWithAccess = new Set(Object.keys(snap.iamRoleResourceAccess ?? {}))
   for (const role of snap.iamRoles ?? []) {
-    if (!rolesWithAccess.has(role.RoleName)) continue
+    const access = snap.iamRoleResourceAccess?.[role.RoleName]
+    if (!access) continue
+    // Skip roles with no analyzable permissions and no unanalyzed managed policies
+    if (!Object.keys(access.service_access ?? {}).length &&
+        !(access.unanalyzed_managed_policies ?? []).length) continue
     add(mkNode(`role-${role.RoleName}`, 'iam_role', role.RoleName, 'IAM Role', [
       { key: 'ARN', value: role.Arn }, { key: 'Name', value: role.RoleName },
     ], role as unknown as Record<string, unknown>, 'running', false))
   }
 
   // ── Secrets (hidden — shown when parent expanded or via search) ───────────
-  const referencedSecrets = new Set(Object.keys(snap.secretConsumers ?? {}))
+  // secretConsumers keys are valueFrom ARNs which may have a :JSON_KEY:: suffix
+  const referencedSecrets = new Set(
+    Object.keys(snap.secretConsumers ?? {}).map(baseSecretArn)
+  )
   for (const s of snap.secrets ?? []) {
     if (!referencedSecrets.has(s.ARN) && !referencedSecrets.has(s.Name)) continue
     const name = s.Name.split('/').pop() ?? s.Name
@@ -340,6 +370,250 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
     ], { logGroupName: lgPath }, 'running', false))
   }
 
+  // ── EKS clusters (visible) ────────────────────────────────────────────────
+  for (const rec of snap.eksClusterDetails ?? []) {
+    const cl = rec.data?.cluster
+    if (!cl) continue
+    const vpc = cl.resourcesVpcConfig?.vpcId ?? ''
+    add(mkNode(cl.arn, 'eks_cluster', cl.name, `EKS v${cl.version}`, [
+      { key: 'ARN', value: cl.arn },
+      { key: 'Name', value: cl.name },
+      { key: 'Version', value: cl.version },
+      { key: 'Status', value: cl.status },
+      { key: 'VPC', value: vpc },
+      { key: 'Endpoint', value: cl.endpoint ?? '' },
+      { key: 'Role', value: cl.roleArn?.split('/').pop() ?? '' },
+    ], cl as unknown as Record<string, unknown>,
+    cl.status === 'ACTIVE' ? 'running' : 'warning', true))
+  }
+
+  // ── WAFv2 WebACLs (hidden — revealed by auth expand) ─────────────────────
+  for (const rec of [...(snap.wafv2RegionalDetails ?? []), ...(snap.wafv2CfDetails ?? [])]) {
+    const acl = rec.data?.WebACL
+    if (!acl) continue
+    add(mkNode(acl.ARN, 'wafv2_webacl', acl.Name, 'WAFv2', [
+      { key: 'ARN', value: acl.ARN },
+      { key: 'Name', value: acl.Name },
+      { key: 'Description', value: acl.Description ?? '' },
+    ], acl as unknown as Record<string, unknown>, 'running', false))
+  }
+
+  // ── GuardDuty detectors (hidden) ──────────────────────────────────────────
+  for (const rec of snap.guarddutyDetails ?? []) {
+    const status = rec.data?.Status ?? 'UNKNOWN'
+    add(mkNode(`gd-${rec.detector_id}`, 'guardduty_detector', 'GuardDuty', rec.detector_id.slice(0, 8), [
+      { key: 'Detector ID', value: rec.detector_id },
+      { key: 'Status', value: status },
+      { key: 'Frequency', value: rec.data?.FindingPublishingFrequency ?? '' },
+    ], rec as unknown as Record<string, unknown>,
+    status === 'ENABLED' ? 'running' : 'warning', false))
+  }
+
+  // ── VPCs (hidden — revealed by network expand) ────────────────────────────
+  for (const vpc of snap.vpcs ?? []) {
+    const name = vpc.Tags?.find(t => t.Key === 'Name')?.Value ?? vpc.VpcId
+    add(mkNode(`vpc-${vpc.VpcId}`, 'vpc', name, vpc.CidrBlock, [
+      { key: 'VPC ID', value: vpc.VpcId },
+      { key: 'CIDR', value: vpc.CidrBlock },
+      { key: 'State', value: vpc.State },
+    ], vpc as unknown as Record<string, unknown>,
+    vpc.State === 'available' ? 'running' : 'warning', false))
+  }
+
+  // ── EventBridge buses (hidden — derived from rules data) ─────────────────
+  const seenBuses = new Set<string>()
+  for (const rec of snap.eventbridgeRules ?? []) {
+    if (!rec.bus || seenBuses.has(rec.bus)) continue
+    seenBuses.add(rec.bus)
+    add(mkNode(`eb-bus-${rec.bus}`, 'eventbridge_bus', rec.bus, 'EventBridge Bus', [
+      { key: 'Bus', value: rec.bus },
+    ], { bus: rec.bus }, 'running', false))
+  }
+
+  // ── MSK clusters (hidden) ─────────────────────────────────────────────────
+  for (const cl of snap.mskClusters ?? []) {
+    add(mkNode(cl.ClusterArn, 'msk_cluster', cl.ClusterName, cl.ClusterType ?? 'MSK', [
+      { key: 'ARN', value: cl.ClusterArn },
+      { key: 'Name', value: cl.ClusterName },
+      { key: 'State', value: cl.State },
+    ], cl as unknown as Record<string, unknown>,
+    cl.State === 'ACTIVE' ? 'running' : 'warning', false))
+  }
+
+  // ── MemoryDB clusters (hidden) ────────────────────────────────────────────
+  for (const cl of snap.memorydbClusters ?? []) {
+    add(mkNode(`memdb-${cl.Name}`, 'memorydb', cl.Name, cl.NodeType, [
+      { key: 'Name', value: cl.Name },
+      { key: 'Node Type', value: cl.NodeType },
+      { key: 'Status', value: cl.Status },
+      { key: 'Engine', value: cl.EngineVersion ?? '' },
+    ], cl as unknown as Record<string, unknown>,
+    cl.Status === 'available' ? 'running' : 'warning', false))
+  }
+
+  // ── EC2 instances (hidden) ────────────────────────────────────────────────
+  for (const res of (snap.rdsInstances ? [] : [])) { void res } // placeholder — no ECS EC2 data
+
+  // ── CloudFront distributions (visible) ───────────────────────────────────
+  for (const dist of snap.cloudfrontDistributions ?? []) {
+    const aliases = (dist.Aliases?.Items ?? []).join(', ')
+    const label = (dist.Aliases?.Items ?? [])[0] ?? dist.DomainName
+    add(mkNode(dist.ARN, 'cloudfront', label, dist.DomainName, [
+      { key: 'ARN', value: dist.ARN },
+      { key: 'ID', value: dist.Id },
+      { key: 'Domain', value: dist.DomainName },
+      { key: 'Aliases', value: aliases },
+      { key: 'Status', value: dist.Status },
+    ], dist as unknown as Record<string, unknown>,
+    dist.Status === 'Deployed' ? 'running' : 'warning', true))
+  }
+
+  // ── EFS file systems (hidden) ─────────────────────────────────────────────
+  for (const fs of snap.efsFileSystems ?? []) {
+    const name = fs.Name || fs.FileSystemId
+    add(mkNode(fs.FileSystemId, 'efs', name, 'EFS', [
+      { key: 'File System ID', value: fs.FileSystemId },
+      { key: 'ARN', value: fs.FileSystemArn },
+      { key: 'State', value: fs.LifeCycleState },
+      { key: 'Encrypted', value: fs.Encrypted ? 'Yes' : 'No' },
+    ], fs as unknown as Record<string, unknown>,
+    fs.LifeCycleState === 'available' ? 'running' : 'warning', false))
+  }
+
+  // ── NAT gateways (hidden) ─────────────────────────────────────────────────
+  for (const [ngwId, ngw] of Object.entries(snap.natGatewayEips ?? {})) {
+    const publicIp = ngw.eips[0]?.public_ip ?? ''
+    add(mkNode(`ngw-${ngwId}`, 'nat_gateway', ngwId.split('-').pop() ?? ngwId, 'NAT Gateway', [
+      { key: 'ID', value: ngwId },
+      { key: 'Public IP', value: publicIp },
+      { key: 'Subnet', value: ngw.subnet_id },
+      { key: 'VPC', value: ngw.vpc_id },
+      { key: 'Type', value: ngw.connectivity_type },
+    ], ngw as unknown as Record<string, unknown>,
+    ngw.state === 'available' ? 'running' : 'warning', false))
+  }
+
+  // ── VPC endpoints (hidden) ────────────────────────────────────────────────
+  for (const [epId, ep] of Object.entries(snap.vpcEndpointRoutes ?? {})) {
+    const svcShort = ep.service.split('.').pop() ?? ep.service
+    add(mkNode(`ep-${epId}`, 'vpc_endpoint', svcShort, `${ep.type} endpoint`, [
+      { key: 'Endpoint ID', value: epId },
+      { key: 'Service', value: ep.service },
+      { key: 'Type', value: ep.type },
+      { key: 'VPC', value: ep.vpc_id },
+      { key: 'State', value: ep.state },
+    ], ep as unknown as Record<string, unknown>,
+    ep.state === 'available' ? 'running' : 'warning', false))
+  }
+
+  // ── Step Functions state machines (hidden) ───────────────────────────────
+  for (const [smArn, sm] of Object.entries(snap.sfResourceRefs ?? {})) {
+    add(mkNode(smArn, 'stepfunctions', sm.name, sm.type ?? 'EXPRESS', [
+      { key: 'ARN', value: smArn },
+      { key: 'Name', value: sm.name },
+      { key: 'Type', value: sm.type ?? '' },
+      { key: 'Role', value: sm.role_arn?.split('/').pop() ?? '' },
+    ], sm as unknown as Record<string, unknown>, 'running', false))
+  }
+
+  // ── CodePipeline pipelines (hidden) ───────────────────────────────────────
+  for (const [name, pl] of Object.entries(snap.pipelineChains ?? {})) {
+    add(mkNode(`pipeline-${name}`, 'codepipeline', name, 'CodePipeline', [
+      { key: 'Name', value: name },
+      { key: 'Artifact Bucket', value: pl.artifact_store_bucket },
+    ], pl as unknown as Record<string, unknown>, 'running', false))
+  }
+
+  // ── CodeBuild projects (hidden) ───────────────────────────────────────────
+  for (const project of snap.codebuildProjects ?? []) {
+    add(mkNode(`codebuild-${project}`, 'codebuild', project, 'CodeBuild', [
+      { key: 'Project', value: project },
+    ], { projectName: project }, 'running', false))
+  }
+
+  // ── ECR repositories (hidden — revealed by deployment expand) ────────────
+  for (const repo of snap.ecrRepos ?? []) {
+    add(mkNode(repo.repositoryArn, 'ecr_repo', repo.repositoryName, 'ECR', [
+      { key: 'ARN', value: repo.repositoryArn },
+      { key: 'Name', value: repo.repositoryName },
+      { key: 'URI', value: repo.repositoryUri },
+    ], repo as unknown as Record<string, unknown>, 'running', false))
+  }
+
+  // ── ACM certificates (hidden — revealed by encryption expand) ─────────────
+  for (const rec of snap.acmCertDetails ?? []) {
+    const cert = rec.data?.Certificate
+    if (!cert) continue
+    // Use the ARN from inside the Certificate object as the canonical key;
+    // fall back to the top-level certificate_arn field.
+    const certArn = cert.CertificateArn || rec.certificate_arn
+    if (!certArn) continue
+    const domain = cert.DomainName ?? certArn
+    add(mkNode(certArn, 'acm_cert', domain, 'ACM Certificate', [
+      { key: 'ARN', value: certArn },
+      { key: 'Domain', value: cert.DomainName ?? '' },
+      { key: 'Status', value: cert.Status ?? '' },
+      { key: 'SANs', value: (cert.SubjectAlternativeNames ?? []).join(', ') },
+    ], cert as unknown as Record<string, unknown>, 'running', false))
+  }
+
+  // ── EventBridge rules (hidden — revealed by dataflow expand) ─────────────
+  for (const rec of snap.eventbridgeRules ?? []) {
+    for (const rule of (rec.data?.Rules ?? [])) {
+      if (rule.State === 'DISABLED') continue
+      const ruleKey = `ebr-${rec.bus}/${rule.Name}`
+      add(mkNode(ruleKey, 'eventbridge_rule', rule.Name, rec.bus, [
+        { key: 'ARN', value: rule.Arn },
+        { key: 'Name', value: rule.Name },
+        { key: 'Bus', value: rec.bus },
+        ...(rule.ScheduleExpression ? [{ key: 'Schedule', value: rule.ScheduleExpression }] : []),
+      ], rule as unknown as Record<string, unknown>, 'running', false))
+    }
+  }
+
+  // ── SSM parameters (hidden — revealed via paramConsumers) ─────────────────
+  for (const paramRef of Object.keys(snap.paramConsumers ?? {})) {
+    const name = paramRef.split('/').pop() ?? paramRef
+    add(mkNode(`ssm-${paramRef}`, 'ssm_parameter', name, paramRef, [
+      { key: 'Path', value: paramRef },
+    ], { path: paramRef }, 'running', false))
+  }
+
+  // ── Subnets (hidden — revealed by network expand) ─────────────────────────
+  // Only create nodes for subnets actually used by services/lambdas
+  const usedSubnetIds = new Set<string>()
+  for (const svc of Object.values(snap.serviceTopology ?? {})) {
+    svc.subnets.forEach(s => usedSubnetIds.add(s))
+  }
+  for (const fn of snap.lambdaFunctions ?? []) {
+    for (const s of (fn.VpcConfig?.SubnetIds ?? [])) usedSubnetIds.add(s)
+  }
+  for (const [snId, sn] of Object.entries(snap.subnetClassification ?? {})) {
+    if (!usedSubnetIds.has(snId)) continue
+    const label = sn.name || snId
+    const tier = sn.is_public ? 'public' : 'private'
+    add(mkNode(`subnet-${snId}`, 'subnet', label, `${tier} · ${sn.az}`, [
+      { key: 'Subnet ID', value: snId },
+      { key: 'VPC', value: sn.vpc_id },
+      { key: 'AZ', value: sn.az },
+      { key: 'CIDR', value: sn.cidr },
+      { key: 'Tier', value: tier },
+    ], sn as unknown as Record<string, unknown>, 'running', false))
+  }
+
+  // ── CIDR pseudo-nodes (hidden — revealed by network expand) ───────────────
+  // Only for private/non-internet CIDRs that appear as ingress sources
+  const seenCidrs = new Set<string>()
+  for (const sgEdge of (snap.sgConnectivity?.edges ?? [])) {
+    const cidr = sgEdge.from_cidr
+    if (!cidr || cidr === '0.0.0.0/0' || cidr === '::/0') continue
+    if (seenCidrs.has(cidr)) continue
+    seenCidrs.add(cidr)
+    add(mkNode(`cidr-${cidr}`, 'cidr_block', cidr, 'CIDR', [
+      { key: 'CIDR', value: cidr },
+    ], { cidr }, 'running', false))
+  }
+
   // ── Cloud Map namespaces (hidden — revealed by DNS expand) ───────────────
   for (const ns of snap.cloudMapNamespaces ?? []) {
     add(mkNode(`cm-${ns.Id}`, 'cloud_map_namespace', ns.Name, `Cloud Map (${ns.Type})`, [
@@ -347,6 +621,68 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
       { key: 'Name', value: ns.Name },
       { key: 'Type', value: ns.Type },
     ], ns as unknown as Record<string, unknown>, 'running', false))
+  }
+
+  // ── Enrich ALB/CloudFront nodes with Route53 DNS aliases pointing to them ─
+  // Build lookup: normalised DNS target → list of hostnames pointing to it
+  const dnsAliases: Record<string, string[]> = {}
+  for (const zoneRec of snap.route53RecordSets ?? []) {
+    for (const r of (zoneRec.data?.ResourceRecordSets ?? [])) {
+      if (r.Type !== 'A' && r.Type !== 'AAAA') continue
+      const target = normaliseAlbDns(r.AliasTarget?.DNSName ?? '')
+      if (!target) continue
+      dnsAliases[target] = dnsAliases[target] ?? []
+      dnsAliases[target].push(r.Name.replace(/\.$/, ''))
+    }
+  }
+  // Enrich ALB nodes
+  for (const [lbArn, alb] of Object.entries(snap.albToService ?? {})) {
+    const lbNode = findNode(lbArn, nodes)
+    if (!lbNode) continue
+    const normDns = normaliseAlbDns(alb.dns_name)
+    const aliases = Object.entries(dnsAliases)
+      .filter(([target]) => target.includes(normDns) || normDns.includes(target))
+      .flatMap(([, names]) => names)
+    if (aliases.length) {
+      ;(lbNode.data.metadata as {key:string;value:string}[]).push(
+        { key: 'DNS Aliases', value: aliases.join(', ') }
+      )
+    }
+  }
+  // Enrich CloudFront nodes with Route53 aliases pointing to their domain
+  for (const dist of snap.cloudfrontDistributions ?? []) {
+    const cfNode = findNode(dist.ARN, nodes)
+    if (!cfNode) continue
+    const normCfDomain = dist.DomainName.toLowerCase()
+    const aliases = Object.entries(dnsAliases)
+      .filter(([target]) => target.includes(normCfDomain))
+      .flatMap(([, names]) => names)
+    if (aliases.length) {
+      ;(cfNode.data.metadata as {key:string;value:string}[]).push(
+        { key: 'DNS Aliases', value: aliases.join(', ') }
+      )
+    }
+  }
+
+  // ── Enrich ECS service nodes with running task IPs from taskEniMap ────────
+  const taskIpsBySvc: Record<string, string[]> = {}
+  for (const [, task] of Object.entries(snap.taskEniMap ?? {})) {
+    // task_definition_arn → match to a service by task def prefix
+    const tdBase = task.task_definition_arn.split(':').slice(0, -1).join(':')
+    for (const [svcArn, svc] of Object.entries(snap.serviceTopology ?? {})) {
+      if (svc.task_definition_arn.startsWith(tdBase) || svc.task_definition_arn === task.task_definition_arn) {
+        taskIpsBySvc[svcArn] = taskIpsBySvc[svcArn] ?? []
+        if (task.private_ip) taskIpsBySvc[svcArn].push(task.private_ip)
+      }
+    }
+  }
+  for (const [svcArn, ips] of Object.entries(taskIpsBySvc)) {
+    const svcNode = findNode(svcArn, nodes)
+    if (svcNode && ips.length > 0) {
+      ;(svcNode.data.metadata as {key:string;value:string}[]).push(
+        { key: 'Running Task IPs', value: [...new Set(ips)].join(', ') }
+      )
+    }
   }
 
   // All nodes start hidden — the canvas is built entirely through user
@@ -357,11 +693,10 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
   // EDGES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── DEPLOYMENT: secret consumers (service → secret) ───────────────────────
+  // ── DATAFLOW: secret consumers (service → secret) ────────────────────────
   for (const [secretRef, consumers] of Object.entries(snap.secretConsumers ?? {})) {
-    const secretNode = nodes.find(n =>
-      (n.data.metadata as {key:string;value:string}[]).some(m =>
-        (m.key === 'ARN' || m.key === 'Name') && m.value === secretRef))
+    const baseArn = baseSecretArn(secretRef)
+    const secretNode = findNode(baseArn, nodes)
     if (!secretNode) continue
     const families = [...new Set(consumers.map(c => c.task_definition.split(':')[0]))]
     for (const family of families) {
@@ -370,6 +705,22 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
         (n.data.metadata as {key:string;value:string}[])
           .find(m => m.key === 'Task Definition')?.value.split(':')[0] === family)
       if (svcNode) edge(svcNode.id, secretNode.id, 'dataflow', 'reads secret')
+    }
+  }
+
+  // ── DATAFLOW: SQS / Kinesis → Lambda (event source mappings) ────────────
+  for (const esm of snap.lambdaEsms ?? []) {
+    if (esm.State === 'Disabled') continue
+    const fnNode = findNode(esm.FunctionArn, nodes)
+    if (!fnNode) continue
+    if (esm.EventSourceArn.includes(':sqs:')) {
+      const queueName = esm.EventSourceArn.split(':').pop() ?? ''
+      const sqsNode = nodes.find(n => n.data.resourceType === 'sqs_queue' && n.data.label === queueName)
+      if (sqsNode) edge(sqsNode.id, fnNode.id, 'dataflow', 'triggers Lambda')
+    } else if (esm.EventSourceArn.includes(':kinesis:')) {
+      const streamName = esm.EventSourceArn.split('/').pop() ?? ''
+      const kNode = nodes.find(n => n.data.resourceType === 'kinesis_stream' && n.data.label === streamName)
+      if (kNode) edge(kNode.id, fnNode.id, 'dataflow', 'stream → Lambda')
     }
   }
 
@@ -392,17 +743,106 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
     if (srcNode && dlqNode) edge(srcNode.id, dlqNode.id, 'dataflow', 'dead-letter queue')
   }
 
-  // ── AUTH: API Gateway → Cognito ───────────────────────────────────────────
+  // ── DEPLOYMENT: ALB → EKS cluster (K8s ingress controller pattern) ───────
+  // The K8s LB Controller creates ALBs whose SGs are named with a "k8s-" prefix.
+  // Match strategy: ALB has k8s- SG AND that SG is in the same VPC as the cluster
+  // (checked via subnetClassification of SG member resources).
+  const sgNames = snap.sgConnectivity?.sg_names ?? {}
+
+  // Build vpc_id → EKS cluster ARN map
+  const vpcToEksClusters = new Map<string, string[]>()
+  for (const rec of snap.eksClusterDetails ?? []) {
+    const cl = rec.data?.cluster
+    if (!cl) continue
+    const vpc = cl.resourcesVpcConfig?.vpcId ?? ''
+    if (vpc) {
+      const arr = vpcToEksClusters.get(vpc) ?? []
+      arr.push(cl.arn)
+      vpcToEksClusters.set(vpc, arr)
+    }
+  }
+
+  for (const rec of snap.eksClusterDetails ?? []) {
+    const cl = rec.data?.cluster
+    if (!cl) continue
+    const eksNode = findNode(cl.arn, nodes)
+    if (!eksNode) continue
+
+    // EKS cluster → VPC network edge
+    const vpcNode = findNode(`vpc-${cl.resourcesVpcConfig?.vpcId}`, nodes)
+    if (vpcNode) edge(eksNode.id, vpcNode.id, 'network', 'cluster in VPC')
+
+    // EKS cluster → IAM service role
+    const roleName = cl.roleArn?.split('/').pop() ?? ''
+    const roleNode = findNode(`role-${roleName}`, nodes)
+    if (roleNode) edge(eksNode.id, roleNode.id, 'iam', 'cluster service role')
+  }
+
+  // Build direct ARN → VPC map from the raw load balancer list
+  const lbVpcMap = new Map<string, string>()
+  for (const lb of snap.loadBalancers ?? []) {
+    if (lb.VpcId) lbVpcMap.set(lb.LoadBalancerArn, lb.VpcId)
+  }
+
+  // For each ALB: if it has k8s- SGs and is in the same VPC as a cluster → link
+  for (const [lbArn] of Object.entries(snap.albToService ?? {})) {
+    const lbNode = findNode(lbArn, nodes)
+    if (!lbNode) continue
+    // Find this ALB's SG IDs via sg_members
+    const lbSgs = Object.entries(snap.sgMembers ?? {})
+      .filter(([, members]) => members.some(m => m.resource_id === lbArn))
+      .map(([sgId]) => sgId)
+    // Only proceed if any SG has the k8s- prefix (K8s LB Controller pattern)
+    if (!lbSgs.some(sg => (sgNames[sg] ?? '').toLowerCase().startsWith('k8s-'))) continue
+    // Get the VPC directly from the LB raw data
+    const albVpc = lbVpcMap.get(lbArn) ?? ''
+    if (!albVpc) continue
+    // Link to all EKS clusters in the same VPC
+    for (const clArn of (vpcToEksClusters.get(albVpc) ?? [])) {
+      const eksNode = findNode(clArn, nodes)
+      if (eksNode) edge(lbNode.id, eksNode.id, 'deployment', 'K8s ingress → cluster')
+    }
+  }
+
+  // ── AUTH: WAFv2 WebACL → protected ALB ───────────────────────────────────
+  for (const rec of snap.wafv2RegionalResources ?? []) {
+    const aclNode = findNode(rec.web_acl_arn, nodes)
+    if (!aclNode) continue
+    for (const resArn of (rec.data?.ResourceArns ?? [])) {
+      const lbNode = findNode(resArn, nodes)
+      if (lbNode) edge(aclNode.id, lbNode.id, 'auth', 'WAF protects')
+    }
+  }
+  // CloudFront WAFv2: link via CloudFront distribution WebACLId
+  for (const dist of snap.cloudfrontDistributions ?? []) {
+    const wafId = (dist as any).WebACLId as string | undefined
+    if (!wafId) continue
+    const cfNode = findNode(dist.ARN, nodes)
+    const aclNode = findNode(wafId, nodes)
+    if (cfNode && aclNode) edge(aclNode.id, cfNode.id, 'auth', 'WAF protects')
+  }
+
+  // ── AUTH: API Gateway → Cognito / Lambda authorizer ───────────────────────
   for (const [, auth] of Object.entries(snap.apigwAuthChain ?? {})) {
-    if (!auth.cognito_pool_id) continue
     const apiNode = nodes.find(n =>
       (n.data.resourceType === 'api_gateway_http' || n.data.resourceType === 'api_gateway_rest') &&
       (n.data.metadata as {key:string;value:string}[]).some(m =>
         m.key === 'ID' && m.value === auth.api_id))
-    const cogNode = nodes.find(n => n.data.resourceType === 'cognito_pool' &&
-      (n.data.metadata as {key:string;value:string}[]).some(m =>
-        m.key === 'Pool ID' && m.value === auth.cognito_pool_id))
-    if (apiNode && cogNode) edge(apiNode.id, cogNode.id, 'auth', 'JWT auth via', false)
+    if (!apiNode) continue
+    if (auth.cognito_pool_id) {
+      const cogNode = nodes.find(n => n.data.resourceType === 'cognito_pool' &&
+        (n.data.metadata as {key:string;value:string}[]).some(m =>
+          m.key === 'Pool ID' && m.value === auth.cognito_pool_id))
+      if (cogNode) edge(apiNode.id, cogNode.id, 'auth', 'JWT auth via Cognito', false)
+    }
+    if (auth.type === 'REQUEST' && auth.authorizer_uri) {
+      // URI format: arn:aws:apigateway:region:lambda:path/.../functions/LAMBDA_ARN/invocations
+      const match = auth.authorizer_uri.match(/functions\/(arn:aws:lambda:[^/]+)\//)
+      if (match) {
+        const fnNode = findNode(match[1], nodes)
+        if (fnNode) edge(apiNode.id, fnNode.id, 'auth', 'Lambda REQUEST authorizer', false)
+      }
+    }
   }
 
   // ── NETWORK: SG-based resource-to-resource connectivity ───────────────────
@@ -447,13 +887,14 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
     const roleNode = findNode(`role-${roleName}`, nodes)
     if (!roleNode) continue
     for (const res of (access.service_access?.s3 ?? [])) {
-      const match = res.match(/arn:aws:s3:::([^/]+)/)
+      const match = res.match(/arn:aws:s3:::([^/*]+)/)  // skip wildcards
       if (!match) continue
       const s3Node = findNode(match[1], nodes)
       if (s3Node) edge(roleNode.id, s3Node.id, 'iam', 'can access', false)
     }
     for (const res of (access.service_access?.sqs ?? [])) {
       const queueName = res.split(':').pop() ?? ''
+      if (!queueName || queueName.includes('*')) continue  // skip wildcards
       const sqsNode = nodes.find(n => n.data.resourceType === 'sqs_queue' && n.data.label === queueName)
       if (sqsNode) edge(roleNode.id, sqsNode.id, 'iam', 'can send/receive', false)
     }
@@ -480,6 +921,13 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
     } else if (rtype === 'load_balancer') {
       resourceNode = nodes.find(n => n.data.resourceType === 'alb' &&
         n.data.metadata.some((m: any) => m.key === 'DNS' && m.value.includes(rids?.load_balancer ?? '___')))
+    } else if (rtype === 'lambda_function') {
+      resourceNode = nodes.find(n => n.data.resourceType === 'lambda' &&
+        n.data.label === rids?.function)
+    } else if (rtype === 'rds_cluster') {
+      resourceNode = findNode(rids?.db_cluster, nodes)
+    } else if (rtype === 'dynamodb_table') {
+      resourceNode = findNode(rids?.table, nodes)
     }
 
     if (resourceNode) edge(alarmNode.id, resourceNode.id, 'observability', `monitors ${alarm.metric ?? ''}`, false)
@@ -517,6 +965,260 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
     for (const cm of (svc.cloud_map ?? [])) {
       const nsNode = findNode(`cm-${cm.namespace_id}`, nodes)
       if (nsNode) edge(svcNode.id, nsNode.id, 'dns', `registered as ${cm.service_name}`, false)
+    }
+  }
+
+  // ── DATAFLOW: CloudFront → S3 / ALB origins ──────────────────────────────
+  for (const dist of snap.cloudfrontDistributions ?? []) {
+    const cfNode = findNode(dist.ARN, nodes)
+    if (!cfNode) continue
+    for (const origin of (dist.Origins?.Items ?? [])) {
+      const domain = origin.DomainName
+      // S3 origin
+      const bucket = s3BucketFromOriginDomain(domain)
+      if (bucket) {
+        const s3Node = findNode(bucket, nodes)
+        if (s3Node) edge(cfNode.id, s3Node.id, 'dataflow', 'serves from S3')
+        continue
+      }
+      // ALB origin
+      if (domain.includes('.elb.')) {
+        const normOrigin = normaliseAlbDns(domain)
+        const lbNode = nodes.find(n => {
+          if (n.data.resourceType !== 'alb') return false
+          const dns = (n.data.metadata as {key:string;value:string}[])
+            .find(m => m.key === 'DNS')?.value ?? ''
+          return normaliseAlbDns(dns) === normOrigin
+        })
+        if (lbNode) edge(cfNode.id, lbNode.id, 'dataflow', 'routes to ALB')
+      }
+    }
+    // ENCRYPTION: CloudFront → ACM certificate
+    const certArn = dist.ViewerCertificate?.ACMCertificateArn
+    if (certArn) {
+      const certNode = findNode(certArn, nodes)
+      if (certNode) edge(cfNode.id, certNode.id, 'encryption', 'TLS certificate')
+    }
+  }
+
+  // ── DATAFLOW: ECS service → EFS volume ────────────────────────────────────
+  for (const [svcArn, svc] of Object.entries(snap.serviceTopology ?? {})) {
+    const svcNode = findNode(svcArn, nodes)
+    if (!svcNode) continue
+    for (const vol of (svc.efs_volumes ?? [])) {
+      const efsNode = findNode(vol.file_system_id, nodes)
+      if (efsNode) edge(svcNode.id, efsNode.id, 'dataflow', `mounts EFS: ${vol.volume_name}`)
+    }
+  }
+
+  // ── NETWORK: NAT gateway → subnet ────────────────────────────────────────
+  for (const [ngwId, ngw] of Object.entries(snap.natGatewayEips ?? {})) {
+    const ngwNode = findNode(`ngw-${ngwId}`, nodes)
+    if (!ngwNode) continue
+    const snNode = findNode(`subnet-${ngw.subnet_id}`, nodes)
+    if (snNode) edge(snNode.id, ngwNode.id, 'network', 'NAT gateway in subnet')
+  }
+
+  // ── NETWORK: VPC endpoint → subnets routed through it ────────────────────
+  for (const [epId, ep] of Object.entries(snap.vpcEndpointRoutes ?? {})) {
+    const epNode = findNode(`ep-${epId}`, nodes)
+    if (!epNode) continue
+    for (const snId of [...ep.subnets_routed_through, ...ep.subnet_ids]) {
+      const snNode = findNode(`subnet-${snId}`, nodes)
+      if (snNode) edge(epNode.id, snNode.id, 'network', `${ep.type} endpoint route`)
+    }
+    // Gateway S3/DynamoDB endpoints link to the service
+    if (ep.service.endsWith('.s3')) {
+      for (const b of snap.s3Buckets ?? []) {
+        const bNode = findNode(b.Name, nodes)
+        if (bNode) { edge(epNode.id, bNode.id, 'network', 'private S3 access'); break }
+      }
+    } else if (ep.service.endsWith('.dynamodb')) {
+      for (const tbl of snap.dynamoTables ?? []) {
+        const tblNode = findNode(tbl, nodes)
+        if (tblNode) { edge(epNode.id, tblNode.id, 'network', 'private DynamoDB access'); break }
+      }
+    }
+  }
+
+  // ── DEPLOYMENT: Step Functions → Lambda / ECS task / SQS / SNS ──────────
+  for (const [smArn, sm] of Object.entries(snap.sfResourceRefs ?? {})) {
+    const smNode = findNode(smArn, nodes)
+    if (!smNode) continue
+    for (const ref of (sm.resource_refs ?? [])) {
+      if (ref.resource_type === 'lambda' && ref.resource_arn) {
+        const fnNode = findNode(ref.resource_arn, nodes)
+        if (fnNode) edge(smNode.id, fnNode.id, 'deployment', `invokes: ${ref.state_name}`)
+      } else if (ref.resource_type === 'ecs_task') {
+        const svcNode = nodes.find(n => n.data.resourceType === 'ecs_service' &&
+          (n.data.raw as any)?.task_definition_arn?.includes((ref as any).task_definition ?? '___'))
+        if (svcNode) edge(smNode.id, svcNode.id, 'deployment', `runs ECS task: ${ref.state_name}`)
+      } else if (ref.resource_type === 'sqs' && ref.queue_url) {
+        const queueName = ref.queue_url.split('/').pop() ?? ''
+        const sqsNode = nodes.find(n => n.data.resourceType === 'sqs_queue' && n.data.label === queueName)
+        if (sqsNode) edge(smNode.id, sqsNode.id, 'dataflow', `sends to queue: ${ref.state_name}`)
+      } else if (ref.resource_type === 'sns' && ref.topic_arn) {
+        const topicName = ref.topic_arn.split(':').pop() ?? ''
+        const snsNode = nodes.find(n => n.data.resourceType === 'sns_topic' && n.data.label === topicName)
+        if (snsNode) edge(smNode.id, snsNode.id, 'dataflow', `publishes: ${ref.state_name}`)
+      } else if (ref.resource_type === 'stepfunctions' && ref.state_machine_arn) {
+        const childSm = findNode(ref.state_machine_arn, nodes)
+        if (childSm) edge(smNode.id, childSm.id, 'deployment', `child state machine: ${ref.state_name}`)
+      }
+    }
+  }
+
+  // ── DEPLOYMENT: CodePipeline → ECS service / CodeBuild ───────────────────
+  for (const [name, pl] of Object.entries(snap.pipelineChains ?? {})) {
+    const plNode = findNode(`pipeline-${name}`, nodes)
+    if (!plNode) continue
+    for (const ref of (pl.resource_refs ?? [])) {
+      if (ref.resource_type === 'ecs_service' && ref.service) {
+        const svcNode = nodes.find(n => n.data.resourceType === 'ecs_service' && n.data.label === ref.service)
+        if (svcNode) edge(plNode.id, svcNode.id, 'deployment', 'deploys to ECS')
+      } else if (ref.resource_type === 'codebuild' && ref.project) {
+        const cbNode = findNode(`codebuild-${ref.project}`, nodes)
+        if (cbNode) edge(plNode.id, cbNode.id, 'deployment', 'builds with CodeBuild')
+      }
+    }
+  }
+
+  // ── DEPLOYMENT: ECS service / Lambda → ECR repo (image pull) ─────────────
+  for (const [svcArn, svc] of Object.entries(snap.serviceTopology ?? {})) {
+    const svcNode = findNode(svcArn, nodes)
+    if (!svcNode) continue
+    for (const container of svc.containers) {
+      for (const repo of (snap.ecrRepos ?? [])) {
+        if (container.image.startsWith(repo.repositoryUri)) {
+          const repoNode = findNode(repo.repositoryArn, nodes)
+          if (repoNode) edge(svcNode.id, repoNode.id, 'deployment', `pulls image: ${container.name}`)
+          break
+        }
+      }
+    }
+  }
+  for (const fn of snap.lambdaFunctions ?? []) {
+    const fnNode = findNode(fn.FunctionArn, nodes)
+    if (!fnNode) continue
+    for (const repo of (snap.ecrRepos ?? [])) {
+      if ((fn as any).Code?.ImageUri?.startsWith(repo.repositoryUri)) {
+        const repoNode = findNode(repo.repositoryArn, nodes)
+        if (repoNode) edge(fnNode.id, repoNode.id, 'deployment', 'pulls container image')
+        break
+      }
+    }
+  }
+
+  // ── ENCRYPTION: ALB → ACM certificate (via listeners) ────────────────────
+  for (const rec of snap.elbListeners ?? []) {
+    const lbNode = findNode(rec.load_balancer_arn, nodes)
+    if (!lbNode) continue
+    for (const listener of (rec.data?.Listeners ?? [])) {
+      for (const cert of (listener.Certificates ?? [])) {
+        const certNode = findNode(cert.CertificateArn, nodes)
+        if (certNode) edge(lbNode.id, certNode.id, 'encryption', `TLS on port ${listener.Port}`)
+      }
+    }
+  }
+
+  // ── DATAFLOW: EventBridge rule → Lambda / SQS / SNS / Step Functions ──────
+  for (const rec of snap.eventbridgeTargets ?? []) {
+    const ruleKey = `ebr-${rec.bus}/${rec.rule}`
+    const ruleNode = findNode(ruleKey, nodes)
+    if (!ruleNode) continue
+    for (const target of (rec.data?.Targets ?? [])) {
+      const arn = target.Arn
+      if (arn.includes(':lambda:')) {
+        const fnNode = findNode(arn, nodes)
+        if (fnNode) edge(ruleNode.id, fnNode.id, 'dataflow', 'triggers Lambda')
+      } else if (arn.includes(':sqs:')) {
+        const queueName = arn.split(':').pop() ?? ''
+        const sqsNode = nodes.find(n => n.data.resourceType === 'sqs_queue' && n.data.label === queueName)
+        if (sqsNode) edge(ruleNode.id, sqsNode.id, 'dataflow', 'sends to queue')
+      } else if (arn.includes(':sns:')) {
+        const topicName = arn.split(':').pop() ?? ''
+        const snsNode = nodes.find(n => n.data.resourceType === 'sns_topic' && n.data.label === topicName)
+        if (snsNode) edge(ruleNode.id, snsNode.id, 'dataflow', 'publishes to topic')
+      } else if (arn.includes(':states:')) {
+        const smNode = findNode(arn, nodes)
+        if (smNode) edge(ruleNode.id, smNode.id, 'dataflow', 'triggers state machine')
+      }
+    }
+  }
+
+  // ── DATAFLOW: ECS service → SSM parameter ────────────────────────────────
+  for (const [paramRef, consumers] of Object.entries(snap.paramConsumers ?? {})) {
+    const paramNode = findNode(`ssm-${paramRef}`, nodes)
+    if (!paramNode) continue
+    const families = [...new Set(consumers.map(c => c.task_definition.split(':')[0]))]
+    for (const family of families) {
+      const svcNode = nodes.find(n =>
+        n.data.resourceType === 'ecs_service' &&
+        (n.data.metadata as {key:string;value:string}[])
+          .find(m => m.key === 'Task Definition')?.value.split(':')[0] === family)
+      if (svcNode) edge(svcNode.id, paramNode.id, 'dataflow', 'reads SSM parameter')
+    }
+  }
+
+  // ── NETWORK: subnet → VPC ────────────────────────────────────────────────
+  for (const [snId, sn] of Object.entries(snap.subnetClassification ?? {})) {
+    const snNode = findNode(`subnet-${snId}`, nodes)
+    const vpcNode = findNode(`vpc-${sn.vpc_id}`, nodes)
+    if (snNode && vpcNode) edge(snNode.id, vpcNode.id, 'network', 'subnet in VPC')
+  }
+
+  // ── DATAFLOW: EventBridge rule → bus (parent relationship) ───────────────
+  for (const rec of snap.eventbridgeRules ?? []) {
+    const busNode = findNode(`eb-bus-${rec.bus}`, nodes)
+    if (!busNode) continue
+    for (const rule of (rec.data?.Rules ?? [])) {
+      if (rule.State === 'DISABLED') continue
+      const ruleNode = findNode(`ebr-${rec.bus}/${rule.Name}`, nodes)
+      if (ruleNode) edge(busNode.id, ruleNode.id, 'dataflow', 'bus routes rule')
+    }
+  }
+
+  // ── NETWORK: ECS service / Lambda → subnet ────────────────────────────────
+  for (const [svcArn, svc] of Object.entries(snap.serviceTopology ?? {})) {
+    const svcNode = findNode(svcArn, nodes)
+    if (!svcNode) continue
+    for (const snId of svc.subnets) {
+      const snNode = findNode(`subnet-${snId}`, nodes)
+      if (snNode) edge(svcNode.id, snNode.id, 'network', 'runs in subnet')
+    }
+  }
+  for (const fn of snap.lambdaFunctions ?? []) {
+    const fnNode = findNode(fn.FunctionArn, nodes)
+    if (!fnNode) continue
+    for (const snId of (fn.VpcConfig?.SubnetIds ?? [])) {
+      const snNode = findNode(`subnet-${snId}`, nodes)
+      if (snNode) edge(fnNode.id, snNode.id, 'network', 'runs in subnet')
+    }
+  }
+
+  // ── NETWORK: CIDR block → SG members ─────────────────────────────────────
+  for (const sgEdge of (snap.sgConnectivity?.edges ?? [])) {
+    const cidr = sgEdge.from_cidr
+    if (!cidr || cidr === '0.0.0.0/0' || cidr === '::/0') continue
+    const cidrNode = findNode(`cidr-${cidr}`, nodes)
+    if (!cidrNode) continue
+    const portLabel = sgEdge.from_port
+      ? `${sgEdge.protocol}:${sgEdge.from_port}`
+      : sgEdge.protocol === '-1' ? 'all' : sgEdge.protocol
+    for (const member of (snap.sgMembers?.[sgEdge.to_sg] ?? [])) {
+      const toNode = findNode(member.resource_id, nodes)
+      if (toNode) edge(cidrNode.id, toNode.id, 'network', `ingress from ${cidr} (${portLabel})`, false, portLabel)
+    }
+  }
+
+  // ── IAM: role trust → role (role chaining) ────────────────────────────────
+  for (const [roleName, trust] of Object.entries(snap.iamRoleTrustAnalysis ?? {})) {
+    const roleNode = findNode(`role-${roleName}`, nodes)
+    if (!roleNode) continue
+    for (const trustedRoleArn of (trust.trusted_roles ?? [])) {
+      const trustedRoleName = trustedRoleArn.split('/').pop() ?? ''
+      const trustedNode = findNode(`role-${trustedRoleName}`, nodes)
+      if (trustedNode) edge(trustedNode.id, roleNode.id, 'iam', 'can assume role')
     }
   }
 

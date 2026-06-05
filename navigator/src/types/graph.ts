@@ -12,17 +12,19 @@ export type ResourceCategory =
   | 'observability' // CloudWatch alarm, log group
 
 export type ResourceType =
-  | 'ecs_service' | 'lambda' | 'ec2_instance'
+  | 'ecs_service' | 'lambda' | 'ec2_instance' | 'eks_cluster'
   | 'alb' | 'api_gateway_rest' | 'api_gateway_http' | 'cloudfront'
   | 'rds_instance' | 'rds_cluster' | 'redshift_cluster' | 'redshift_serverless'
   | 'dynamodb_table' | 'elasticache' | 'memorydb' | 'opensearch' | 'docdb_cluster'
   | 'efs' | 's3_bucket'
-  | 'sqs_queue' | 'sns_topic' | 'eventbridge_bus' | 'kinesis_stream'
+  | 'sqs_queue' | 'sns_topic' | 'eventbridge_bus' | 'eventbridge_rule' | 'kinesis_stream'
   | 'firehose_stream' | 'msk_cluster' | 'stepfunctions'
-  | 'iam_role' | 'secret' | 'kms_key'
+  | 'iam_role' | 'secret' | 'kms_key' | 'acm_cert' | 'ssm_parameter'
+  | 'wafv2_webacl' | 'guardduty_detector'
   | 'codepipeline' | 'codebuild' | 'ecr_repo' | 'cognito_pool'
   | 'cw_alarm' | 'log_group' | 'cloud_map_namespace'
   | 'vpc' | 'subnet' | 'security_group' | 'nat_gateway' | 'vpc_endpoint'
+  | 'cidr_block'
 
 // ─── Edge relationship types ─────────────────────────────────────────────────
 

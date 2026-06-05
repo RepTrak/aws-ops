@@ -49,7 +49,7 @@ export default function Canvas({
       const hit =
         String(d.label).toLowerCase().includes(t) ||
         (d.metadata as { key: string; value: string }[]).some(m =>
-          m.value.toLowerCase().includes(t))
+          m.value != null && String(m.value).toLowerCase().includes(t))
       return { ...n, data: { ...n.data, highlighted: hit } }
     })
   }, [nodes, searchTerm])

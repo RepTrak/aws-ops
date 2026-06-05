@@ -131,6 +131,10 @@ function Navigator() {
     // Compute the complete set of visible node IDs from pinned + active expansions
     const visibleIds = computeVisibleIds(next, currentEdges)
 
+    // Collect the IDs that are newly revealed by this specific expansion so we
+    // can pan the viewport to include them after React commits the node update.
+    let newlyRevealedIds: string[] = []
+
     // Apply visibility to nodes — compute non-overlapping positions for newly revealed siblings
     setNodes(prev => {
       const needsUpdate = prev.some(n => n.hidden === visibleIds.has(n.id))
@@ -153,6 +157,7 @@ function Navigator() {
           const positions = positionSiblings(
             siblings.length, anchor.position, direction, existingPositions)
           siblingPositions = new Map(siblings.map((s, i) => [s.id, positions[i]]))
+          newlyRevealedIds = siblings.map(s => s.id)
         }
       }
 
@@ -169,7 +174,27 @@ function Navigator() {
         }
       })
     })
-  }, [setNodes])
+
+    // Pan viewport to include the anchor + all expansion targets (newly revealed OR already
+    // visible). This handles the case where the target node is already on canvas from a
+    // previous expansion — the user still needs the viewport to pan to it.
+    if (isExpanding) {
+      const allTargetIds = currentEdges
+        .filter(e =>
+          (e.data as RelationshipEdge['data'])?.relationship === edgeType &&
+          (direction === 'out' ? e.source === nodeId : e.target === nodeId))
+        .map(e => direction === 'out' ? e.target : e.source)
+      if (allTargetIds.length > 0) {
+        setTimeout(() => {
+          fitView({
+            nodes: [nodeId, ...allTargetIds].map(id => ({ id })),
+            duration: 350,
+            padding: 0.35,
+          })
+        }, 50)
+      }
+    }
+  }, [setNodes, fitView, computeVisibleIds])
 
   // ── Hide node — marks it forced-hidden, unpins it, removes its expansions ─
   const handleHideNode = useCallback((nodeId: string) => {
