@@ -37,6 +37,14 @@ python3 -m http.server 8000
 
 ## Core concepts
 
+### Infinite canvas
+
+The navigator uses an **infinite canvas** — a zoomable, pannable workspace with no fixed
+boundaries. You can place nodes anywhere, zoom from a high-level overview down to a single
+service, and drag nodes to arrange them however makes sense for the problem you are solving.
+There is no predetermined layout or fixed diagram size; the canvas expands as you add more
+resources.
+
 ### Empty canvas
 
 The canvas starts empty every session. Resources appear only when you explicitly place them:
