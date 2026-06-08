@@ -10,7 +10,6 @@ safe_aws_json "${OUT_DIR}/raw/ecr-registry-scanning-config.json" ecr get-registr
 
 repo_names="$(jq -r '.repositories[]?.repositoryName // empty' \
   "${OUT_DIR}/raw/ecr-repositories.json" 2>/dev/null || true)"
-local s3_bucket_count  # reuse grep -c pattern
 repo_count="$(echo "$repo_names" | grep -c . || true)"
 echo "→ ${OUT_DIR}/raw/ecr-repository-policies.ndjson"
 : > "${OUT_DIR}/raw/ecr-repository-policies.ndjson"
