@@ -128,6 +128,16 @@ function Navigator() {
       setFilters(prev => prev[edgeType as keyof typeof prev] ? prev : { ...prev, [edgeType]: true })
     }
 
+    // When expanding, lift the forced-hidden ban for nodes directly targeted by
+    // this expansion — "x" means "hide until re-expanded", not "permanently hidden".
+    if (isExpanding) {
+      for (const e of currentEdges) {
+        if ((e.data as RelationshipEdge['data'])?.relationship !== edgeType) continue
+        if (direction === 'out' && e.source === nodeId) forcedHiddenIdsRef.current.delete(e.target)
+        if (direction === 'in'  && e.target === nodeId) forcedHiddenIdsRef.current.delete(e.source)
+      }
+    }
+
     // Compute the complete set of visible node IDs from pinned + active expansions
     const visibleIds = computeVisibleIds(next, currentEdges)
 
