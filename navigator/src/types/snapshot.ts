@@ -242,14 +242,14 @@ export interface ElbListenerRecord {
   }
 }
 export interface EventbridgeRuleRecord {
-  bus: string
+  event_bus_name: string
   data?: {
     Rules?: Array<{ Name: string; Arn: string; State: string; ScheduleExpression?: string }>
   }
 }
 export interface EventbridgeTargetRecord {
-  rule: string
-  bus: string
+  rule_name: string
+  event_bus_name: string
   data?: { Targets?: Array<{ Id: string; Arn: string }> }
 }
 export interface EfsRaw {

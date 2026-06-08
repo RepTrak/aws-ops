@@ -423,11 +423,11 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
   // ── EventBridge buses (hidden — derived from rules data) ─────────────────
   const seenBuses = new Set<string>()
   for (const rec of snap.eventbridgeRules ?? []) {
-    if (!rec.bus || seenBuses.has(rec.bus)) continue
-    seenBuses.add(rec.bus)
-    add(mkNode(`eb-bus-${rec.bus}`, 'eventbridge_bus', rec.bus, 'EventBridge Bus', [
-      { key: 'Bus', value: rec.bus },
-    ], { bus: rec.bus }, 'running', false))
+    if (!rec.event_bus_name || seenBuses.has(rec.event_bus_name)) continue
+    seenBuses.add(rec.event_bus_name)
+    add(mkNode(`eb-bus-${rec.event_bus_name}`, 'eventbridge_bus', rec.event_bus_name, 'EventBridge Bus', [
+      { key: 'Bus', value: rec.event_bus_name },
+    ], { bus: rec.event_bus_name }, 'running', false))
   }
 
   // ── MSK clusters (hidden) ─────────────────────────────────────────────────
@@ -561,11 +561,11 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
   for (const rec of snap.eventbridgeRules ?? []) {
     for (const rule of (rec.data?.Rules ?? [])) {
       if (rule.State === 'DISABLED') continue
-      const ruleKey = `ebr-${rec.bus}/${rule.Name}`
-      add(mkNode(ruleKey, 'eventbridge_rule', rule.Name, rec.bus, [
+      const ruleKey = `ebr-${rec.event_bus_name}/${rule.Name}`
+      add(mkNode(ruleKey, 'eventbridge_rule', rule.Name, rec.event_bus_name, [
         { key: 'ARN', value: rule.Arn },
         { key: 'Name', value: rule.Name },
-        { key: 'Bus', value: rec.bus },
+        { key: 'Bus', value: rec.event_bus_name },
         ...(rule.ScheduleExpression ? [{ key: 'Schedule', value: rule.ScheduleExpression }] : []),
       ], rule as unknown as Record<string, unknown>, 'running', false))
     }
@@ -1138,7 +1138,7 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
 
   // ── DATAFLOW: EventBridge rule → Lambda / SQS / SNS / Step Functions ──────
   for (const rec of snap.eventbridgeTargets ?? []) {
-    const ruleKey = `ebr-${rec.bus}/${rec.rule}`
+    const ruleKey = `ebr-${rec.event_bus_name}/${rec.rule_name}`
     const ruleNode = findNode(ruleKey, nodes)
     if (!ruleNode) continue
     for (const target of (rec.data?.Targets ?? [])) {
@@ -1184,11 +1184,11 @@ export function buildGraph(snap: SnapshotData): { nodes: ResourceNode[]; edges: 
 
   // ── DATAFLOW: EventBridge rule → bus (parent relationship) ───────────────
   for (const rec of snap.eventbridgeRules ?? []) {
-    const busNode = findNode(`eb-bus-${rec.bus}`, nodes)
+    const busNode = findNode(`eb-bus-${rec.event_bus_name}`, nodes)
     if (!busNode) continue
     for (const rule of (rec.data?.Rules ?? [])) {
       if (rule.State === 'DISABLED') continue
-      const ruleNode = findNode(`ebr-${rec.bus}/${rule.Name}`, nodes)
+      const ruleNode = findNode(`ebr-${rec.event_bus_name}/${rule.Name}`, nodes)
       if (ruleNode) edge(busNode.id, ruleNode.id, 'dataflow', 'bus routes rule')
     }
   }
